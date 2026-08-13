@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>Weight Tracker</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -20,6 +23,7 @@
             --accent: #22d3ee;
             --danger: #f87171;
             --success: #34d399;
+            --warning: #fbbf24;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html { scroll-behavior: smooth; }
@@ -43,22 +47,69 @@
             z-index: 0;
         }
         .app { max-width: 480px; margin: 0 auto; position: relative; z-index: 1; padding: 0 16px; }
-        header { padding: 28px 0 20px; text-align: center; }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity .4s;
+        }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--surface-3);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; color: var(--text-muted); font-size: .9rem; }
+
+        header { padding: 24px 0 16px; text-align: center; position: relative; }
         header h1 {
-            font-size: 1.7rem;
+            font-size: 1.6rem;
             font-weight: 800;
             letter-spacing: -.03em;
             background: linear-gradient(135deg, #fff, #94a3b8);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        header p { color: var(--text-muted); margin-top: 4px; font-size: .9rem; }
+        header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
+
+        .sync-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 6px 0;
+            font-size: .7rem;
+            color: var(--text-muted);
+            min-height: 28px;
+        }
+        .sync-bar.syncing { color: var(--accent); }
+        .sync-bar.offline { color: var(--warning); }
+        .sync-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse-dot 2s infinite;
+        }
+        .sync-bar.offline .sync-dot { background: var(--warning); animation: none; }
+        .sync-bar.syncing .sync-dot { background: var(--accent); animation: pulse-dot .8s infinite; }
+        @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
 
         .stats-scroll {
             display: flex;
             gap: 10px;
             overflow-x: auto;
-            padding: 0 0 16px;
+            padding: 0 0 14px;
             scroll-snap-type: x mandatory;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
@@ -96,7 +147,7 @@
             margin-bottom: 6px;
             font-weight: 600;
         }
-        .stat-card .value { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
+        .stat-card .value { font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em; }
         .stat-card.morning .value { color: var(--morning); }
         .stat-card.night .value { color: var(--night); }
         .stat-card.diff .value { color: var(--accent); }
@@ -106,7 +157,7 @@
         .section-title {
             font-size: 1rem;
             font-weight: 700;
-            margin: 24px 0 12px;
+            margin: 22px 0 10px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -118,10 +169,10 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 24px;
-            padding: 20px;
-            margin-bottom: 16px;
+            padding: 18px;
+            margin-bottom: 14px;
         }
-        .chart-container { position: relative; height: 220px; }
+        .chart-container { position: relative; height: 210px; }
         .legend {
             display: flex;
             gap: 20px;
@@ -148,7 +199,7 @@
             overflow: hidden;
         }
         .entry-card:active { transform: scale(.98); background: var(--surface-2); }
-        .entry-card .date-section { flex-shrink: 0; text-align: center; min-width: 48px; }
+        .entry-card .date-section { flex-shrink: 0; text-align: center; min-width: 44px; }
         .entry-card .day-num { font-size: 1.3rem; font-weight: 700; color: var(--text); }
         .entry-card .day-name {
             font-size: .65rem;
@@ -158,7 +209,7 @@
             font-weight: 600;
             margin-top: -2px;
         }
-        .entry-card .weights { flex: 1; display: flex; gap: 16px; }
+        .entry-card .weights { flex: 1; display: flex; gap: 14px; }
         .entry-card .weight-block { text-align: center; flex: 1; }
         .entry-card .weight-block .time-label {
             font-size: .6rem;
@@ -171,7 +222,7 @@
         .entry-card .weight-block .weight-val { font-size: 1.15rem; font-weight: 700; }
         .entry-card .weight-block.morning .weight-val { color: var(--morning); }
         .entry-card .weight-block.night .weight-val { color: var(--night); }
-        .entry-card .diff-section { text-align: right; min-width: 50px; }
+        .entry-card .diff-section { text-align: right; min-width: 46px; }
         .entry-card .diff-val { font-size: .9rem; font-weight: 700; }
         .entry-card .diff-val.positive { color: var(--danger); }
         .entry-card .diff-val.negative { color: var(--success); }
@@ -192,9 +243,9 @@
         }
 
         .btn-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
             border: none;
             display: flex;
             align-items: center;
@@ -202,7 +253,7 @@
             cursor: pointer;
             transition: all .15s;
         }
-        .btn-icon svg { width: 14px; height: 14px; }
+        .btn-icon svg { width: 13px; height: 13px; }
         .btn-icon.edit { background: rgba(34,211,238,.1); color: var(--accent); }
         .btn-icon.edit:active { background: rgba(34,211,238,.2); }
         .btn-icon.delete { background: rgba(248,113,113,.1); color: var(--danger); }
@@ -216,8 +267,8 @@
             bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
-            width: 64px;
-            height: 64px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--accent), #0ea5e9);
             border: none;
@@ -231,7 +282,7 @@
             transition: all .25s cubic-bezier(.34,1.56,.64,1);
         }
         .fab:active { transform: translateX(-50%) scale(.9); }
-        .fab svg { width: 28px; height: 28px; }
+        .fab svg { width: 26px; height: 26px; }
 
         .bottom-sheet {
             position: fixed;
@@ -255,7 +306,7 @@
             position: relative;
             background: var(--surface-2);
             border-radius: 28px 28px 0 0;
-            padding: 24px 20px 32px;
+            padding: 22px 20px 32px;
             width: 100%;
             max-width: 480px;
             transform: translateY(100%);
@@ -263,13 +314,13 @@
             border-top: 1px solid var(--border);
         }
         .bottom-sheet.show .sheet-content { transform: translateY(0); }
-        .sheet-handle { width: 40px; height: 4px; background: var(--border); border-radius: 4px; margin: 0 auto 20px; }
-        .sheet-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 20px; text-align: center; }
+        .sheet-handle { width: 40px; height: 4px; background: var(--border); border-radius: 4px; margin: 0 auto 18px; }
+        .sheet-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 18px; text-align: center; }
 
-        .form-group { margin-bottom: 16px; }
+        .form-group { margin-bottom: 14px; }
         .form-group label {
             display: block;
-            font-size: .8rem;
+            font-size: .78rem;
             color: var(--text-muted);
             font-weight: 600;
             margin-bottom: 6px;
@@ -295,7 +346,7 @@
         .form-group input::placeholder { color: #475569; }
         .form-group input[type="date"] { color-scheme: dark; }
 
-        .sheet-actions { display: flex; gap: 10px; margin-top: 8px; }
+        .sheet-actions { display: flex; gap: 10px; margin-top: 6px; }
         .sheet-actions .btn {
             flex: 1;
             padding: 16px;
@@ -356,11 +407,21 @@
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Connecting...</div>
+    </div>
+
     <div class="app">
         <header>
             <h1>Weight Tracker</h1>
             <p>Log morning & night, every day</p>
         </header>
+
+        <div class="sync-bar" id="syncBar">
+            <div class="sync-dot"></div>
+            <span id="syncText">Syncing...</span>
+        </div>
 
         <div class="stats-scroll">
             <div class="stat-card morning">
@@ -423,11 +484,11 @@
                 <input type="date" id="date" required>
             </div>
             <div class="form-group">
-                <label for="morning">Morning </label>
+                <label for="morning">Morning (after washroom)</label>
                 <input type="number" id="morning" step="0.1" placeholder="e.g. 72.5" required inputmode="decimal">
             </div>
             <div class="form-group">
-                <label for="night">Night </label>
+                <label for="night">Night (before bed)</label>
                 <input type="number" id="night" step="0.1" placeholder="e.g. 73.2" required inputmode="decimal">
             </div>
             <div class="sheet-actions">
@@ -440,16 +501,24 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        // ===================== YOUR FIREBASE CONFIG =====================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFlNF9tZiwZyR0N_Et0Bajhh8Ac0_06cA",
+            authDomain: "weight-tracker-317a0.firebaseapp.com",
+            projectId: "weight-tracker-317a0",
+            storageBucket: "weight-tracker-317a0.firebasestorage.app",
+            messagingSenderId: "1074791128257",
+            appId: "1:1074791128257:web:fe4385c8707d5263ed4840"
+        };
+        // ================================================================
+
         const STORAGE_KEY = 'weight_tracker_data';
         let entries = [], editingId = null, chart = null;
-        document.getElementById('date').valueAsDate = new Date();
+        let db = null, userId = null, unsubscribe = null;
+        let isOnline = navigator.onLine;
+        let pendingSync = false;
 
-        function loadData() {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) { try { entries = JSON.parse(raw); } catch(e) { entries = []; } }
-            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-        }
-        function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }
+        document.getElementById('date').valueAsDate = new Date();
 
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
@@ -459,10 +528,22 @@
             setTimeout(() => toast.classList.remove('show'), 2800);
         }
 
+        function setSyncStatus(status, text) {
+            const bar = document.getElementById('syncBar');
+            const txt = document.getElementById('syncText');
+            bar.className = 'sync-bar ' + status;
+            txt.textContent = text;
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
         function openSheet() {
             document.getElementById('bottomSheet').classList.add('show');
             setTimeout(() => document.getElementById('morning').focus(), 350);
         }
+
         function closeSheet() {
             document.getElementById('bottomSheet').classList.remove('show');
             setTimeout(() => {
@@ -474,7 +555,124 @@
                 document.getElementById('night').value = '';
             }, 300);
         }
-        function closeSheetOnOverlay(e) { if (e.target.classList.contains('overlay')) closeSheet(); }
+
+        function closeSheetOnOverlay(e) {
+            if (e.target.classList.contains('overlay')) closeSheet();
+        }
+
+        function loadLocal() {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                try { entries = JSON.parse(raw); } catch(e) { entries = []; }
+            }
+            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+        }
+
+        function saveLocal() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+        }
+
+        function initFirebase() {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+
+            db.enablePersistence({ synchronizeTabs: true })
+                .catch(err => {
+                    if (err.code === 'failed-precondition') {
+                        console.log('Persistence failed: multiple tabs open');
+                    } else if (err.code === 'unimplemented') {
+                        console.log('Persistence not supported');
+                    }
+                });
+
+            firebase.auth().onAuthStateChanged(user => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('loadingText').textContent = 'Loading your data...';
+                    listenToFirestore();
+                } else {
+                    firebase.auth().signInAnonymously()
+                        .catch(err => {
+                            console.error('Auth error:', err);
+                            document.getElementById('loadingText').textContent = 'Auth failed. Using offline mode.';
+                            setTimeout(hideLoading, 1500);
+                            setSyncStatus('offline', 'Offline mode');
+                            loadLocal();
+                            renderAll();
+                        });
+                }
+            });
+        }
+
+        function listenToFirestore() {
+            if (!db || !userId) return;
+            setSyncStatus('syncing', 'Syncing...');
+
+            unsubscribe = db.collection('users').doc(userId).collection('entries')
+                .orderBy('date', 'asc')
+                .onSnapshot(snapshot => {
+                    const fireEntries = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        fireEntries.push({
+                            id: doc.id,
+                            date: data.date,
+                            morning: data.morning,
+                            night: data.night
+                        });
+                    });
+                    entries = fireEntries;
+                    saveLocal();
+                    renderAll();
+                    setSyncStatus('', 'Synced');
+                    hideLoading();
+                }, err => {
+                    console.error('Firestore error:', err);
+                    setSyncStatus('offline', 'Offline — using local data');
+                    loadLocal();
+                    renderAll();
+                    hideLoading();
+                });
+        }
+
+        async function saveToFirestore(entry) {
+            if (!db || !userId || !isOnline) {
+                pendingSync = true;
+                return;
+            }
+            setSyncStatus('syncing', 'Saving...');
+            try {
+                await db.collection('users').doc(userId).collection('entries').doc(entry.id).set({
+                    date: entry.date,
+                    morning: entry.morning,
+                    night: entry.night,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                setSyncStatus('', 'Synced');
+                pendingSync = false;
+            } catch (err) {
+                console.error('Save error:', err);
+                pendingSync = true;
+                setSyncStatus('offline', 'Saved locally — will sync');
+            }
+        }
+
+        async function deleteFromFirestore(id) {
+            if (!db || !userId || !isOnline) {
+                pendingSync = true;
+                return;
+            }
+            setSyncStatus('syncing', 'Deleting...');
+            try {
+                await db.collection('users').doc(userId).collection('entries').doc(id).delete();
+                setSyncStatus('', 'Synced');
+                pendingSync = false;
+            } catch (err) {
+                console.error('Delete error:', err);
+                pendingSync = true;
+                setSyncStatus('offline', 'Deleted locally — will sync');
+            }
+        }
 
         function getStreak() {
             if (entries.length === 0) return 0;
@@ -483,39 +681,49 @@
             for (let i = dates.length - 1; i > 0; i--) {
                 const c = new Date(dates[i] + 'T00:00:00');
                 const p = new Date(dates[i - 1] + 'T00:00:00');
-                if ((c - p) / (1000 * 60 * 60 * 24) === 1) streak++; else break;
+                if ((c - p) / (1000 * 60 * 60 * 24) === 1) streak++;
+                else break;
             }
             return streak;
         }
+
         function getTrend() {
             if (entries.length < 2) return null;
             const l = entries[entries.length - 1], p = entries[entries.length - 2];
             return { morning: l.morning - p.morning, night: l.night - p.night };
         }
 
-        function handleSubmit() {
+        async function handleSubmit() {
             const d = document.getElementById('date').value;
             const m = parseFloat(document.getElementById('morning').value);
             const n = parseFloat(document.getElementById('night').value);
             if (!d || isNaN(m) || isNaN(n)) { showToast('Fill all fields', true); return; }
 
+            let entryId;
             if (editingId) {
-                const i = entries.findIndex(e => e.id === editingId);
-                if (i !== -1) { entries[i] = { id: editingId, date: d, morning: m, night: n }; showToast('Updated!'); }
+                entryId = editingId;
+                const idx = entries.findIndex(e => e.id === editingId);
+                if (idx !== -1) entries[idx] = { id: editingId, date: d, morning: m, night: n };
                 editingId = null;
+                showToast('Updated!');
             } else {
                 const ex = entries.findIndex(e => e.date === d);
                 if (ex !== -1) {
                     if (!confirm('Entry exists for this date. Overwrite?')) return;
-                    entries[ex] = { id: entries[ex].id, date: d, morning: m, night: n };
+                    entryId = entries[ex].id;
+                    entries[ex] = { id: entryId, date: d, morning: m, night: n };
                     showToast('Updated!');
                 } else {
-                    entries.push({ id: Date.now(), date: d, morning: m, night: n });
+                    entryId = Date.now().toString();
+                    entries.push({ id: entryId, date: d, morning: m, night: n });
                     showToast('Added!');
                 }
             }
             entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-            saveData(); renderAll(); closeSheet();
+            saveLocal();
+            renderAll();
+            await saveToFirestore({ id: entryId, date: d, morning: m, night: n });
+            closeSheet();
         }
 
         function editEntry(id) {
@@ -529,10 +737,14 @@
             document.getElementById('submitBtn').textContent = 'Update';
             openSheet();
         }
-        function deleteEntry(id) {
+
+        async function deleteEntry(id) {
             if (!confirm('Delete this entry?')) return;
             entries = entries.filter(e => e.id !== id);
-            saveData(); renderAll(); showToast('Deleted');
+            saveLocal();
+            renderAll();
+            showToast('Deleted');
+            await deleteFromFirestore(id);
         }
 
         function updateStats() {
@@ -541,7 +753,7 @@
                 document.getElementById('avgNight').textContent = '--';
                 document.getElementById('avgDiff').textContent = '--';
                 document.getElementById('entryCount').textContent = '0';
-                ['avgMorningSub','avgNightSub','avgDiffSub','streakDisplay'].forEach(id => document.getElementById(id).textContent = '');
+                ['avgMorningSub','avgNightSub','avgDiffSub','streakDisplay'].forEach(id => document.getElementById(id).innerHTML = '');
                 return;
             }
             const avgM = entries.reduce((s, e) => s + e.morning, 0) / entries.length;
@@ -567,8 +779,8 @@
                     : t.night < 0 ? `<span class="trend-mini down">&#9660; ${t.night.toFixed(1)}</span>` : '<span class="trend-mini">No change</span>';
                 document.getElementById('avgDiffSub').textContent = 'vs last';
             } else {
-                document.getElementById('avgMorningSub').textContent = '';
-                document.getElementById('avgNightSub').textContent = '';
+                document.getElementById('avgMorningSub').innerHTML = '';
+                document.getElementById('avgNightSub').innerHTML = '';
                 document.getElementById('avgDiffSub').textContent = '';
             }
         }
@@ -593,8 +805,8 @@
                     </div>
                     <div class="diff-section"><div class="diff-val ${dc}">${ds}${diff.toFixed(1)}</div><div class="diff-label">kg diff</div></div>
                     <div class="actions">
-                        <button class="btn-icon edit" onclick="event.stopPropagation();editEntry(${e.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                        <button class="btn-icon delete" onclick="event.stopPropagation();deleteEntry(${e.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                        <button class="btn-icon edit" onclick="event.stopPropagation();editEntry('${e.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                        <button class="btn-icon delete" onclick="event.stopPropagation();deleteEntry('${e.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                     </div>
                 </div>`;
             }).join('');
@@ -615,12 +827,12 @@
                     datasets: [
                         {
                             label: 'Morning', data: entries.map(e => e.morning), borderColor: '#fbbf24',
-                            backgroundColor: (ctx) => { const c = ctx.chart.ctx; const g = c.createLinearGradient(0,0,0,220); g.addColorStop(0,'rgba(251,191,36,.12)'); g.addColorStop(1,'rgba(251,191,36,0)'); return g; },
+                            backgroundColor: (ctx) => { const c = ctx.chart.ctx; const g = c.createLinearGradient(0,0,0,210); g.addColorStop(0,'rgba(251,191,36,.12)'); g.addColorStop(1,'rgba(251,191,36,0)'); return g; },
                             borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#fbbf24', pointBorderColor: '#0c0f1a', pointBorderWidth: 3, pointHoverRadius: 6, tension: .4, fill: true
                         },
                         {
                             label: 'Night', data: entries.map(e => e.night), borderColor: '#a78bfa',
-                            backgroundColor: (ctx) => { const c = ctx.chart.ctx; const g = c.createLinearGradient(0,0,0,220); g.addColorStop(0,'rgba(167,139,250,.12)'); g.addColorStop(1,'rgba(167,139,250,0)'); return g; },
+                            backgroundColor: (ctx) => { const c = ctx.chart.ctx; const g = c.createLinearGradient(0,0,0,210); g.addColorStop(0,'rgba(167,139,250,.12)'); g.addColorStop(1,'rgba(167,139,250,0)'); return g; },
                             borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#a78bfa', pointBorderColor: '#0c0f1a', pointBorderWidth: 3, pointHoverRadius: 6, tension: .4, fill: true
                         }
                     ]
@@ -641,8 +853,26 @@
         }
 
         function renderAll() { updateStats(); renderHistory(); renderChart(); }
-        document.querySelectorAll('input').forEach(i => { i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSubmit(); }); });
-        loadData(); renderAll();
+
+        window.addEventListener('online', () => {
+            isOnline = true;
+            setSyncStatus('syncing', 'Back online — syncing...');
+            if (pendingSync && db && userId) {
+                entries.forEach(e => saveToFirestore(e));
+            }
+        });
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            setSyncStatus('offline', 'Offline — changes saved locally');
+        });
+
+        document.querySelectorAll('input').forEach(i => {
+            i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSubmit(); });
+        });
+
+        loadLocal();
+        renderAll();
+        initFirebase();
     </script>
 </body>
 </html>
