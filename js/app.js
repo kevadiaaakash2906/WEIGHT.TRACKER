@@ -234,4 +234,266 @@ function renderStats() {
     const lastMorningEntry = [...entries].reverse().find(e => e.morning != null);
     const bmiValue = document.getElementById('bmiValue');
     const bmiCategory = document.getElementById('bmiCategory');
-    if
+    if (settings.heightCm && bmiValue && lastMorningEntry) {
+        const bmi = calculateBMI(lastMorningEntry.morning, settings.heightCm);
+        if (bmi) {
+            bmiValue.textContent = bmi.toFixed(1);
+            const cat = getBMICategory(bmi);
+            bmiCategory.textContent = cat.label;
+            bmiCategory.className = 'bmi-category ' + cat.class;
+        }
+    } else if (bmiValue) {
+        bmiValue.textContent = '--';
+        if (bmiCategory) { bmiCategory.textContent = 'Set height'; bmiCategory.className = 'bmi-category'; }
+    }
+
+    const goalValue = document.getElementById('goalValue');
+    const goalProgress = document.getElementById('goalProgress');
+    const goalDays = document.getElementById('goalDays');
+    if (settings.goalWeight && goalValue && entries.length > 0) {
+        const progress = getGoalProgress(entries, settings.goalWeight, settings.heightCm);
+        if (progress) {
+            goalValue.textContent = progress.percent + '%';
+            if (goalProgress) goalProgress.style.width = progress.percent + '%';
+            if (goalDays) {
+                if (progress.reached) goalDays.textContent = '🎉 Goal reached!';
+                else if (progress.daysToGoal) goalDays.textContent = `~${progress.daysToGoal} days to goal`;
+                else goalDays.textContent = `${progress.remaining.toFixed(1)} kg to go`;
+            }
+            if (progress.reached && !settings.goalCelebrated) {
+                settings.goalCelebrated = true;
+                saveSettings(settings);
+                triggerConfetti();
+                showToast('🎉 You reached your goal weight!');
+            }
+        }
+    } else if (goalValue) {
+        goalValue.textContent = '--';
+        if (goalProgress) goalProgress.style.width = '0%';
+        if (goalDays) goalDays.textContent = 'Set a goal';
+    }
+}
+
+function renderWeekly() {
+    const container = document.getElementById('weeklySummary');
+    if (!container) return;
+    const summary = getWeeklyChange(entries);
+    if (!summary) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'block';
+
+    const formatChange = (curr, prev) => {
+        if (curr == null || prev == null) return '<span class="weekly-item-change neutral">—</span>';
+        const diff = curr - prev;
+        const arrow = diff > 0 ? '&#9650;' : diff < 0 ? '&#9660;' : '';
+        const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral';
+        return `<span class="weekly-item-change ${cls}">${arrow} ${Math.abs(diff).toFixed(1)}</span>`;
+    };
+
+    container.innerHTML = `
+        <div class="weekly-card">
+            <div class="weekly-header">
+                <span class="weekly-title">This Week</span>
+                <span class="weekly-badge">${summary.thisWeek.count} entries</span>
+            </div>
+            <div class="weekly-grid">
+                <div class="weekly-item">
+                    <div class="weekly-item-label">Avg Morning</div>
+                    <div class="weekly-item-value">${summary.thisWeek.morning != null ? summary.thisWeek.morning.toFixed(1) : '—'}</div>
+                    ${formatChange(summary.thisWeek.morning, summary.lastWeek ? summary.lastWeek.morning : null)}
+                </div>
+                <div class="weekly-item">
+                    <div class="weekly-item-label">Avg Night</div>
+                    <div class="weekly-item-value">${summary.thisWeek.night != null ? summary.thisWeek.night.toFixed(1) : '—'}</div>
+                    ${formatChange(summary.thisWeek.night, summary.lastWeek ? summary.lastWeek.night : null)}
+                </div>
+                <div class="weekly-item">
+                    <div class="weekly-item-label">Avg Diff</div>
+                    <div class="weekly-item-value">${summary.thisWeek.diff != null ? (summary.thisWeek.diff >= 0 ? '+' : '') + summary.thisWeek.diff.toFixed(1) : '—'}</div>
+                    ${formatChange(summary.thisWeek.diff, summary.lastWeek ? summary.lastWeek.diff : null)}
+                </div>
+                <div class="weekly-item">
+                    <div class="weekly-item-label">Trend</div>
+                    <div class="weekly-item-value" style="font-size:.9rem">
+                        ${summary.lastWeek && summary.thisWeek.morning != null && summary.lastWeek.morning != null 
+                            ? (summary.thisWeek.morning < summary.lastWeek.morning ? '<span style="color:var(--success)">↓ Losing</span>' : summary.thisWeek.morning > summary.lastWeek.morning ? '<span style="color:var(--danger)">↑ Gaining</span>' : '<span style="color:var(--text-muted)">→ Stable</span>') 
+                            : '<span style="color:var(--text-muted)">Need more data</span>'}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderHistory() {
+    const c = document.getElementById('historyList');
+    if (!c) return;
+    if (entries.length === 0) {
+        c.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/><path d="M9 14l2 2 4-4"/></svg><p>No entries yet.<br>Tap + to add your first weight!</p></div>`;
+        return;
+    }
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    c.innerHTML = [...entries].reverse().map(e => {
+        const d = new Date(e.date + 'T00:00:00');
+        const diff = (e.morning != null && e.night != null) ? e.night - e.morning : null;
+        const dc = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
+        const ds = diff > 0 ? '+' : '';
+        return `<div class="entry-card">
+            <div class="date-section"><div class="day-num">${d.getDate()}</div><div class="day-name">${days[d.getDay()]}</div></div>
+            <div class="weights">
+                <div class="weight-block morning"><div class="time-label">Morning</div><div class="weight-val">${e.morning != null ? e.morning.toFixed(1) : '<span class="weight-missing">--</span>'}</div></div>
+                <div class="weight-block night"><div class="time-label">Night</div><div class="weight-val">${e.night != null ? e.night.toFixed(1) : '<span class="weight-missing">--</span>'}</div></div>
+            </div>
+            <div class="diff-section"><div class="diff-val ${dc}">${diff != null ? ds + diff.toFixed(1) : '--'}</div><div class="diff-label">kg diff</div></div>
+            <div class="actions">
+                <button class="btn-icon edit" onclick="event.stopPropagation();editEntry('${e.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="btn-icon delete" onclick="event.stopPropagation();deleteEntry('${e.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderAll() {
+    renderStats();
+    renderWeekly();
+    const filtered = filterEntriesByTime(entries, currentTimeFilter);
+    renderChart(filtered);
+    renderHistory();
+}
+
+// Actions
+function openAddSheet() {
+    editingId = null;
+    document.getElementById('sheetTitle').textContent = 'Add Entry';
+    document.getElementById('submitBtn').textContent = 'Add';
+    document.getElementById('date').valueAsDate = new Date();
+    document.getElementById('weight').value = '';
+    setTimeOfDay('morning');
+    openSheet();
+}
+
+function openSettingsSheet() {
+    const settings = loadSettings();
+    document.getElementById('settingHeight').value = settings.heightCm || '';
+    document.getElementById('settingGoal').value = settings.goalWeight || '';
+    openSheet('settingsSheet');
+}
+
+async function handleSubmit() {
+    const d = document.getElementById('date').value;
+    const w = parseFloat(document.getElementById('weight').value);
+    if (!d || isNaN(w)) { showToast('Fill all fields', true); return; }
+
+    let entryId;
+    if (editingId) {
+        entryId = editingId;
+        const idx = entries.findIndex(e => e.id === editingId);
+        if (idx !== -1) {
+            entries[idx].date = d;
+            if (currentTimeOfDay === 'morning') entries[idx].morning = w;
+            else entries[idx].night = w;
+        }
+        editingId = null;
+        showToast('Updated!');
+    } else {
+        const ex = entries.findIndex(e => e.date === d);
+        if (ex !== -1) {
+            entryId = entries[ex].id;
+            if (currentTimeOfDay === 'morning') entries[ex].morning = w;
+            else entries[ex].night = w;
+            showToast('Updated!');
+        } else {
+            entryId = Date.now().toString();
+            const newEntry = { id: entryId, date: d, morning: null, night: null };
+            if (currentTimeOfDay === 'morning') newEntry.morning = w;
+            else newEntry.night = w;
+            entries.push(newEntry);
+            showToast('Added!');
+        }
+    }
+    entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+    saveLocal();
+    renderAll();
+    await saveToFirestore(entries.find(e => e.id === entryId));
+    closeSheet();
+}
+
+function editEntry(id) {
+    const e = entries.find(x => x.id === id);
+    if (!e) return;
+    document.getElementById('date').value = e.date;
+    
+    if (e.morning != null) {
+        setTimeOfDay('morning');
+        document.getElementById('weight').value = e.morning;
+    } else if (e.night != null) {
+        setTimeOfDay('night');
+        document.getElementById('weight').value = e.night;
+    } else {
+        setTimeOfDay('morning');
+        document.getElementById('weight').value = '';
+    }
+    
+    editingId = id;
+    document.getElementById('sheetTitle').textContent = 'Edit Entry';
+    document.getElementById('submitBtn').textContent = 'Update';
+    openSheet();
+}
+
+async function deleteEntry(id) {
+    if (!confirm('Delete this entry?')) return;
+    entries = entries.filter(e => e.id !== id);
+    saveLocal();
+    renderAll();
+    showToast('Deleted');
+    await deleteFromFirestore(id);
+}
+
+function handleSettingsSave() {
+    const settings = loadSettings();
+    const height = parseFloat(document.getElementById('settingHeight').value);
+    const goal = parseFloat(document.getElementById('settingGoal').value);
+    if (!isNaN(height) && height > 0) settings.heightCm = height;
+    if (!isNaN(goal) && goal > 0) {
+        settings.goalWeight = goal;
+        settings.goalCelebrated = false;
+    }
+    saveSettings(settings);
+    renderAll();
+    closeSheet('settingsSheet');
+    showToast('Settings saved');
+}
+
+function handleFilterClick(filter) {
+    currentTimeFilter = filter;
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    const active = document.querySelector(`[data-filter="${filter}"]`);
+    if (active) active.classList.add('active');
+    renderAll();
+}
+
+// Init
+window.addEventListener('online', () => {
+    isOnline = true;
+    setSyncStatus('syncing', 'Back online — syncing...');
+    if (pendingSync && db && userId) entries.forEach(e => saveToFirestore(e));
+});
+window.addEventListener('offline', () => {
+    isOnline = false;
+    setSyncStatus('offline', 'Offline — changes saved locally');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('#bottomSheet input').forEach(i => {
+        i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSubmit(); });
+    });
+    document.querySelectorAll('#settingsSheet input').forEach(i => {
+        i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSettingsSave(); });
+    });
+    
+    loadLocal();
+    renderAll();
+    initFirebase();
+});
