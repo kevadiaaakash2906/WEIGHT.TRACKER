@@ -531,3 +531,37 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
     0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
     100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
 }
+
+.toggle-group {
+    display: flex;
+    gap: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1.5px solid var(--border);
+    background: var(--surface-3);
+}
+.toggle-btn {
+    flex: 1;
+    padding: 14px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: .9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.toggle-btn.active {
+    background: linear-gradient(135deg, var(--accent), #0ea5e9);
+    color: #0f172a;
+}
+.toggle-btn:active { opacity: .8; }
+.toggle-btn svg { flex-shrink: 0; }
+
+.weight-missing { color: var(--text-muted); opacity: .4; font-weight: 400 !important; }
+.entry-card .weight-block .weight-missing { font-size: 1.05rem; }
