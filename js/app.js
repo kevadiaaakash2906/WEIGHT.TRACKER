@@ -472,6 +472,7 @@ function renderInsight() {
 function renderAll() {
     renderStats();
     renderWeekly();
+    renderInsight();        // <-- ADD THIS
     const filtered = filterEntriesByTime(entries, currentTimeFilter);
     renderChart(filtered);
     renderHistory();
