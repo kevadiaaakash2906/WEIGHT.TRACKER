@@ -1,4 +1,4 @@
-const WORKER_URL = 'https://weight-tracker.kevadiaakash.workers.dev';
+const WORKER_URL = 'https://weight-tracker.kevadiaaakash.workers.dev/';
 
 async function getAICoachAdvice(entries, settings) {
     if (!entries || entries.length < 3) {
