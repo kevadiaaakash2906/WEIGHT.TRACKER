@@ -114,12 +114,21 @@
                 <input type="date" id="date" required>
             </div>
             <div class="form-group">
-                <label for="morning">Morning (after washroom)</label>
-                <input type="number" id="morning" step="0.1" placeholder="e.g. 72.5" required inputmode="decimal">
+                <label>Time of Day</label>
+                <div class="toggle-group">
+                    <button class="toggle-btn" id="toggleMorning" onclick="setTimeOfDay('morning')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                        Morning
+                    </button>
+                    <button class="toggle-btn" id="toggleNight" onclick="setTimeOfDay('night')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                        Night
+                    </button>
+                </div>
             </div>
             <div class="form-group">
-                <label for="night">Night (before bed)</label>
-                <input type="number" id="night" step="0.1" placeholder="e.g. 73.2" required inputmode="decimal">
+                <label for="weight" id="weightLabel">Weight (kg)</label>
+                <input type="number" id="weight" step="0.1" placeholder="e.g. 72.5" required inputmode="decimal">
             </div>
             <div class="sheet-actions">
                 <button class="btn btn-secondary" onclick="closeSheet()">Cancel</button>
