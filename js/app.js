@@ -378,6 +378,12 @@ function openSettingsSheet() {
     const settings = loadSettings();
     document.getElementById('settingHeight').value = settings.heightCm || '';
     document.getElementById('settingGoal').value = settings.goalWeight || '';
+    
+    // Show signed-in email in settings title
+    const user = firebase.auth().currentUser;
+    const email = user ? user.email : 'Not signed in';
+    document.querySelector('#settingsSheet .sheet-title').textContent = 'Settings — ' + email;
+    
     openSheet('settingsSheet');
 }
 
