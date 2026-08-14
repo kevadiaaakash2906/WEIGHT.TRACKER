@@ -9,6 +9,7 @@ let db = null, userId = null, unsubscribe = null;
 let isOnline = navigator.onLine;
 let pendingSync = false;
 let currentTimeFilter = 'all';
+let currentTimeOfDay = 'morning';
 
 // Settings
 function loadSettings() {
@@ -30,6 +31,27 @@ function loadLocal() {
 
 function saveLocal() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+// Time-of-day toggle
+function setTimeOfDay(tod) {
+    currentTimeOfDay = tod;
+    const mBtn = document.getElementById('toggleMorning');
+    const nBtn = document.getElementById('toggleNight');
+    if (mBtn) mBtn.classList.toggle('active', tod === 'morning');
+    if (nBtn) nBtn.classList.toggle('active', tod === 'night');
+    
+    const label = document.getElementById('weightLabel');
+    if (label) label.textContent = `Weight (${tod === 'morning' ? 'Morning' : 'Night'}) (kg)`;
+    
+    // If editing, switch the input to show the weight for selected time
+    if (editingId) {
+        const e = entries.find(x => x.id === editingId);
+        if (e) {
+            const val = tod === 'morning' ? e.morning : e.night;
+            document.getElementById('weight').value = val != null ? val : '';
+        }
+    }
 }
 
 // Firebase
@@ -72,7 +94,12 @@ function listenToFirestore() {
             const fireEntries = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
-                fireEntries.push({ id: doc.id, date: data.date, morning: data.morning, night: data.night });
+                fireEntries.push({ 
+                    id: doc.id, 
+                    date: data.date, 
+                    morning: data.morning, 
+                    night: data.night 
+                });
             });
             entries = fireEntries;
             saveLocal();
@@ -81,7 +108,7 @@ function listenToFirestore() {
             hideLoading();
         }, err => {
             console.error('Firestore error:', err);
-            setSyncStatus('offline', 'Offline � using local data');
+            setSyncStatus('offline', 'Offline — using local data');
             loadLocal();
             renderAll();
             hideLoading();
@@ -93,7 +120,9 @@ async function saveToFirestore(entry) {
     setSyncStatus('syncing', 'Saving...');
     try {
         await db.collection('users').doc(userId).collection('entries').doc(entry.id).set({
-            date: entry.date, morning: entry.morning, night: entry.night,
+            date: entry.date, 
+            morning: entry.morning ?? null, 
+            night: entry.night ?? null,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         setSyncStatus('', 'Synced');
@@ -101,7 +130,7 @@ async function saveToFirestore(entry) {
     } catch (err) {
         console.error('Save error:', err);
         pendingSync = true;
-        setSyncStatus('offline', 'Saved locally � will sync');
+        setSyncStatus('offline', 'Saved locally — will sync');
     }
 }
 
@@ -115,7 +144,7 @@ async function deleteFromFirestore(id) {
     } catch (err) {
         console.error('Delete error:', err);
         pendingSync = true;
-        setSyncStatus('offline', 'Deleted locally � will sync');
+        setSyncStatus('offline', 'Deleted locally — will sync');
     }
 }
 
@@ -135,13 +164,16 @@ function renderStats() {
         return;
     }
 
-    const avgM = entries.reduce((s, e) => s + e.morning, 0) / entries.length;
-    const avgN = entries.reduce((s, e) => s + e.night, 0) / entries.length;
-    const avgD = avgN - avgM;
+    const morningEntries = entries.filter(e => e.morning != null);
+    const nightEntries = entries.filter(e => e.night != null);
 
-    document.getElementById('avgMorning').textContent = avgM.toFixed(1);
-    document.getElementById('avgNight').textContent = avgN.toFixed(1);
-    document.getElementById('avgDiff').textContent = (avgD >= 0 ? '+' : '') + avgD.toFixed(1);
+    const avgM = morningEntries.length > 0 ? morningEntries.reduce((s, e) => s + e.morning, 0) / morningEntries.length : null;
+    const avgN = nightEntries.length > 0 ? nightEntries.reduce((s, e) => s + e.night, 0) / nightEntries.length : null;
+    const avgD = (avgM != null && avgN != null) ? avgN - avgM : null;
+
+    document.getElementById('avgMorning').textContent = avgM != null ? avgM.toFixed(1) : '--';
+    document.getElementById('avgNight').textContent = avgN != null ? avgN.toFixed(1) : '--';
+    document.getElementById('avgDiff').textContent = avgD != null ? (avgD >= 0 ? '+' : '') + avgD.toFixed(1) : '--';
     document.getElementById('entryCount').textContent = entries.length;
 
     const streak = getStreak(entries);
@@ -171,8 +203,9 @@ function renderStats() {
     // BMI
     const bmiValue = document.getElementById('bmiValue');
     const bmiCategory = document.getElementById('bmiCategory');
-    if (settings.heightCm && bmiValue && entries.length > 0) {
-        const bmi = calculateBMI(entries[entries.length - 1].morning, settings.heightCm);
+    const lastMorningEntry = [...entries].reverse().find(e => e.morning != null);
+    if (settings.heightCm && bmiValue && lastMorningEntry) {
+        const bmi = calculateBMI(lastMorningEntry.morning, settings.heightCm);
         if (bmi) {
             bmiValue.textContent = bmi.toFixed(1);
             const cat = getBMICategory(bmi);
@@ -194,7 +227,7 @@ function renderStats() {
             goalValue.textContent = progress.percent + '%';
             if (goalProgress) goalProgress.style.width = progress.percent + '%';
             if (goalDays) {
-                if (progress.reached) goalDays.textContent = '?? Goal reached!';
+                if (progress.reached) goalDays.textContent = '🎉 Goal reached!';
                 else if (progress.daysToGoal) goalDays.textContent = `~${progress.daysToGoal} days to goal`;
                 else goalDays.textContent = `${progress.remaining.toFixed(1)} kg to go`;
             }
@@ -202,7 +235,7 @@ function renderStats() {
                 settings.goalCelebrated = true;
                 saveSettings(settings);
                 triggerConfetti();
-                showToast('?? You reached your goal weight!');
+                showToast('🎉 You reached your goal weight!');
             }
         }
     } else if (goalValue) {
@@ -223,7 +256,7 @@ function renderWeekly() {
     container.style.display = 'block';
 
     const formatChange = (curr, prev) => {
-        if (!prev) return '<span class="weekly-item-change neutral">�</span>';
+        if (curr == null || prev == null) return '<span class="weekly-item-change neutral">—</span>';
         const diff = curr - prev;
         const arrow = diff > 0 ? '&#9650;' : diff < 0 ? '&#9660;' : '';
         const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral';
@@ -239,23 +272,25 @@ function renderWeekly() {
             <div class="weekly-grid">
                 <div class="weekly-item">
                     <div class="weekly-item-label">Avg Morning</div>
-                    <div class="weekly-item-value">${summary.thisWeek.morning.toFixed(1)}</div>
+                    <div class="weekly-item-value">${summary.thisWeek.morning != null ? summary.thisWeek.morning.toFixed(1) : '—'}</div>
                     ${formatChange(summary.thisWeek.morning, summary.lastWeek ? summary.lastWeek.morning : null)}
                 </div>
                 <div class="weekly-item">
                     <div class="weekly-item-label">Avg Night</div>
-                    <div class="weekly-item-value">${summary.thisWeek.night.toFixed(1)}</div>
+                    <div class="weekly-item-value">${summary.thisWeek.night != null ? summary.thisWeek.night.toFixed(1) : '—'}</div>
                     ${formatChange(summary.thisWeek.night, summary.lastWeek ? summary.lastWeek.night : null)}
                 </div>
                 <div class="weekly-item">
                     <div class="weekly-item-label">Avg Diff</div>
-                    <div class="weekly-item-value">${(summary.thisWeek.diff >= 0 ? '+' : '') + summary.thisWeek.diff.toFixed(1)}</div>
+                    <div class="weekly-item-value">${summary.thisWeek.diff != null ? (summary.thisWeek.diff >= 0 ? '+' : '') + summary.thisWeek.diff.toFixed(1) : '—'}</div>
                     ${formatChange(summary.thisWeek.diff, summary.lastWeek ? summary.lastWeek.diff : null)}
                 </div>
                 <div class="weekly-item">
                     <div class="weekly-item-label">Trend</div>
                     <div class="weekly-item-value" style="font-size:.9rem">
-                        ${summary.lastWeek ? (summary.thisWeek.morning < summary.lastWeek.morning ? '<span style="color:var(--success)">? Losing</span>' : summary.thisWeek.morning > summary.lastWeek.morning ? '<span style="color:var(--danger)">? Gaining</span>' : '<span style="color:var(--text-muted)">? Stable</span>') : '<span style="color:var(--text-muted)">Need more data</span>'}
+                        ${summary.lastWeek && summary.thisWeek.morning != null && summary.lastWeek.morning != null 
+                            ? (summary.thisWeek.morning < summary.lastWeek.morning ? '<span style="color:var(--success)">↓ Losing</span>' : summary.thisWeek.morning > summary.lastWeek.morning ? '<span style="color:var(--danger)">↑ Gaining</span>' : '<span style="color:var(--text-muted)">→ Stable</span>') 
+                            : '<span style="color:var(--text-muted)">Need more data</span>'}
                     </div>
                 </div>
             </div>
@@ -273,16 +308,16 @@ function renderHistory() {
     const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     c.innerHTML = [...entries].reverse().map(e => {
         const d = new Date(e.date + 'T00:00:00');
-        const diff = e.night - e.morning;
+        const diff = (e.morning != null && e.night != null) ? e.night - e.morning : null;
         const dc = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'neutral';
         const ds = diff > 0 ? '+' : '';
         return `<div class="entry-card">
             <div class="date-section"><div class="day-num">${d.getDate()}</div><div class="day-name">${days[d.getDay()]}</div></div>
             <div class="weights">
-                <div class="weight-block morning"><div class="time-label">Morning</div><div class="weight-val">${e.morning.toFixed(1)}</div></div>
-                <div class="weight-block night"><div class="time-label">Night</div><div class="weight-val">${e.night.toFixed(1)}</div></div>
+                <div class="weight-block morning"><div class="time-label">Morning</div><div class="weight-val">${e.morning != null ? e.morning.toFixed(1) : '<span class="weight-missing">--</span>'}</div></div>
+                <div class="weight-block night"><div class="time-label">Night</div><div class="weight-val">${e.night != null ? e.night.toFixed(1) : '<span class="weight-missing">--</span>'}</div></div>
             </div>
-            <div class="diff-section"><div class="diff-val ${dc}">${ds}${diff.toFixed(1)}</div><div class="diff-label">kg diff</div></div>
+            <div class="diff-section"><div class="diff-val ${dc}">${diff != null ? ds + diff.toFixed(1) : '--'}</div><div class="diff-label">kg diff</div></div>
             <div class="actions">
                 <button class="btn-icon edit" onclick="event.stopPropagation();editEntry('${e.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                 <button class="btn-icon delete" onclick="event.stopPropagation();deleteEntry('${e.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
@@ -300,36 +335,52 @@ function renderAll() {
 }
 
 // Actions
+function openAddSheet() {
+    editingId = null;
+    document.getElementById('sheetTitle').textContent = 'Add Entry';
+    document.getElementById('submitBtn').textContent = 'Add';
+    document.getElementById('date').valueAsDate = new Date();
+    document.getElementById('weight').value = '';
+    setTimeOfDay('morning');
+    openSheet();
+}
+
 async function handleSubmit() {
     const d = document.getElementById('date').value;
-    const m = parseFloat(document.getElementById('morning').value);
-    const n = parseFloat(document.getElementById('night').value);
-    if (!d || isNaN(m) || isNaN(n)) { showToast('Fill all fields', true); return; }
+    const w = parseFloat(document.getElementById('weight').value);
+    if (!d || isNaN(w)) { showToast('Fill all fields', true); return; }
 
     let entryId;
     if (editingId) {
         entryId = editingId;
         const idx = entries.findIndex(e => e.id === editingId);
-        if (idx !== -1) entries[idx] = { id: editingId, date: d, morning: m, night: n };
+        if (idx !== -1) {
+            entries[idx].date = d;
+            if (currentTimeOfDay === 'morning') entries[idx].morning = w;
+            else entries[idx].night = w;
+        }
         editingId = null;
         showToast('Updated!');
     } else {
         const ex = entries.findIndex(e => e.date === d);
         if (ex !== -1) {
-            if (!confirm('Entry exists for this date. Overwrite?')) return;
             entryId = entries[ex].id;
-            entries[ex] = { id: entryId, date: d, morning: m, night: n };
+            if (currentTimeOfDay === 'morning') entries[ex].morning = w;
+            else entries[ex].night = w;
             showToast('Updated!');
         } else {
             entryId = Date.now().toString();
-            entries.push({ id: entryId, date: d, morning: m, night: n });
+            const newEntry = { id: entryId, date: d, morning: null, night: null };
+            if (currentTimeOfDay === 'morning') newEntry.morning = w;
+            else newEntry.night = w;
+            entries.push(newEntry);
             showToast('Added!');
         }
     }
     entries.sort((a, b) => new Date(a.date) - new Date(b.date));
     saveLocal();
     renderAll();
-    await saveToFirestore({ id: entryId, date: d, morning: m, night: n });
+    await saveToFirestore(entries.find(e => e.id === entryId));
     closeSheet();
 }
 
@@ -337,8 +388,19 @@ function editEntry(id) {
     const e = entries.find(x => x.id === id);
     if (!e) return;
     document.getElementById('date').value = e.date;
-    document.getElementById('morning').value = e.morning;
-    document.getElementById('night').value = e.night;
+    
+    // Default to morning if it has a value, otherwise night
+    if (e.morning != null) {
+        setTimeOfDay('morning');
+        document.getElementById('weight').value = e.morning;
+    } else if (e.night != null) {
+        setTimeOfDay('night');
+        document.getElementById('weight').value = e.night;
+    } else {
+        setTimeOfDay('morning');
+        document.getElementById('weight').value = '';
+    }
+    
     editingId = id;
     document.getElementById('sheetTitle').textContent = 'Edit Entry';
     document.getElementById('submitBtn').textContent = 'Update';
@@ -380,19 +442,27 @@ function handleFilterClick(filter) {
 // Init
 window.addEventListener('online', () => {
     isOnline = true;
-    setSyncStatus('syncing', 'Back online � syncing...');
+    setSyncStatus('syncing', 'Back online — syncing...');
     if (pendingSync && db && userId) entries.forEach(e => saveToFirestore(e));
 });
 window.addEventListener('offline', () => {
     isOnline = false;
-    setSyncStatus('offline', 'Offline � changes saved locally');
+    setSyncStatus('offline', 'Offline — changes saved locally');
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('date').valueAsDate = new Date();
-    document.querySelectorAll('input').forEach(i => {
+    // Override FAB to use our reset wrapper
+    const fab = document.querySelector('.fab');
+    if (fab) fab.onclick = openAddSheet;
+    
+    // Scope Enter key to the correct sheet
+    document.querySelectorAll('#bottomSheet input').forEach(i => {
         i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSubmit(); });
     });
+    document.querySelectorAll('#settingsSheet input').forEach(i => {
+        i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSettingsSave(); });
+    });
+    
     loadLocal();
     renderAll();
     initFirebase();
