@@ -438,7 +438,41 @@ function handleFilterClick(filter) {
     if (active) active.classList.add('active');
     renderAll();
 }
+function setTimeOfDay(tod) {
+    currentTimeOfDay = tod;
+    const mBtn = document.getElementById('toggleMorning');
+    const nBtn = document.getElementById('toggleNight');
+    if (mBtn) mBtn.classList.toggle('active', tod === 'morning');
+    if (nBtn) nBtn.classList.toggle('active', tod === 'night');
+    
+    const label = document.getElementById('weightLabel');
+    if (label) label.textContent = `Weight (${tod === 'morning' ? 'Morning' : 'Night'}) (kg)`;
+    
+    if (editingId) {
+        const e = entries.find(x => x.id === editingId);
+        if (e) {
+            const val = tod === 'morning' ? e.morning : e.night;
+            document.getElementById('weight').value = val != null ? val : '';
+        }
+    }
+}
 
+function openAddSheet() {
+    editingId = null;
+    document.getElementById('sheetTitle').textContent = 'Add Entry';
+    document.getElementById('submitBtn').textContent = 'Add';
+    document.getElementById('date').valueAsDate = new Date();
+    document.getElementById('weight').value = '';
+    setTimeOfDay('morning');
+    openSheet();
+}
+
+function openSettingsSheet() {
+    const settings = loadSettings();
+    document.getElementById('settingHeight').value = settings.heightCm || '';
+    document.getElementById('settingGoal').value = settings.goalWeight || '';
+    openSheet('settingsSheet');
+}
 // Init
 window.addEventListener('online', () => {
     isOnline = true;
