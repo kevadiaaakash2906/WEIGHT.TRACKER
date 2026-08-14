@@ -613,3 +613,50 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
     color: var(--text);
     line-height: 1.45;
 }
+.insight-card {
+    background: linear-gradient(135deg, var(--surface), var(--surface-2));
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    position: relative;
+    overflow: hidden;
+    transition: all .3s ease;
+    cursor: pointer;
+}
+.insight-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--accent);
+}
+.insight-card.positive::before { background: var(--success); }
+.insight-card.warning::before { background: var(--warning); }
+.insight-card.info::before { background: #818cf8; }
+.insight-card.neutral::before { background: var(--text-muted); }
+
+.insight-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.insight-content { flex: 1; }
+.insight-label {
+    font-size: .65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.insight-text {
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.45;
+}
