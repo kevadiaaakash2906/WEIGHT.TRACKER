@@ -17,6 +17,9 @@ function renderChart(entries) {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     });
 
+    const morningData = entries.map(e => e.morning !== null && e.morning !== undefined ? e.morning : null);
+    const nightData = entries.map(e => e.night !== null && e.night !== undefined ? e.night : null);
+
     chartInstance = new Chart(context, {
         type: 'line',
         data: {
@@ -24,7 +27,7 @@ function renderChart(entries) {
             datasets: [
                 {
                     label: 'Morning',
-                    data: entries.map(e => e.morning),
+                    data: morningData,
                     borderColor: '#fbbf24',
                     backgroundColor: (ctx) => {
                         const c = ctx.chart.ctx;
@@ -40,11 +43,12 @@ function renderChart(entries) {
                     pointBorderWidth: 3,
                     pointHoverRadius: 6,
                     tension: .4,
-                    fill: true
+                    fill: true,
+                    spanGaps: true
                 },
                 {
                     label: 'Night',
-                    data: entries.map(e => e.night),
+                    data: nightData,
                     borderColor: '#a78bfa',
                     backgroundColor: (ctx) => {
                         const c = ctx.chart.ctx;
@@ -60,7 +64,8 @@ function renderChart(entries) {
                     pointBorderWidth: 3,
                     pointHoverRadius: 6,
                     tension: .4,
-                    fill: true
+                    fill: true,
+                    spanGaps: true
                 }
             ]
         },
@@ -82,7 +87,10 @@ function renderChart(entries) {
                     titleFont: { size: 12, weight: '700' },
                     bodyFont: { size: 11 },
                     callbacks: {
-                        label: c => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' kg'
+                        label: c => {
+                            const val = c.parsed.y;
+                            return val !== null ? c.dataset.label + ': ' + val.toFixed(1) + ' kg' : null;
+                        }
                     }
                 }
             },
