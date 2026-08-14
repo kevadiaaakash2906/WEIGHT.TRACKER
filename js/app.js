@@ -1,5 +1,6 @@
 // ============================================
 //  MAIN APP
+//  - Firebase Auth (Google), Data, Rendering, Event Handlers
 // ============================================
 
 let entries = [];
@@ -39,10 +40,10 @@ function setTimeOfDay(tod) {
     const nBtn = document.getElementById('toggleNight');
     if (mBtn) mBtn.classList.toggle('active', tod === 'morning');
     if (nBtn) nBtn.classList.toggle('active', tod === 'night');
-    
+
     const label = document.getElementById('weightLabel');
     if (label) label.textContent = `Weight (${tod === 'morning' ? 'Morning' : 'Night'}) (kg)`;
-    
+
     if (editingId) {
         const e = entries.find(x => x.id === editingId);
         if (e) {
@@ -117,11 +118,11 @@ function listenToFirestore() {
             const fireEntries = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
-                fireEntries.push({ 
-                    id: doc.id, 
-                    date: data.date, 
-                    morning: data.morning, 
-                    night: data.night 
+                fireEntries.push({
+                    id: doc.id,
+                    date: data.date,
+                    morning: data.morning,
+                    night: data.night
                 });
             });
             entries = fireEntries;
@@ -143,8 +144,8 @@ async function saveToFirestore(entry) {
     setSyncStatus('syncing', 'Saving...');
     try {
         await db.collection('users').doc(userId).collection('entries').doc(entry.id).set({
-            date: entry.date, 
-            morning: entry.morning ?? null, 
+            date: entry.date,
+            morning: entry.morning ?? null,
             night: entry.night ?? null,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -317,8 +318,8 @@ function renderWeekly() {
                 <div class="weekly-item">
                     <div class="weekly-item-label">Trend</div>
                     <div class="weekly-item-value" style="font-size:.9rem">
-                        ${summary.lastWeek && summary.thisWeek.morning != null && summary.lastWeek.morning != null 
-                            ? (summary.thisWeek.morning < summary.lastWeek.morning ? '<span style="color:var(--success)">↓ Losing</span>' : summary.thisWeek.morning > summary.lastWeek.morning ? '<span style="color:var(--danger)">↑ Gaining</span>' : '<span style="color:var(--text-muted)">→ Stable</span>') 
+                        ${summary.lastWeek && summary.thisWeek.morning != null && summary.lastWeek.morning != null
+                            ? (summary.thisWeek.morning < summary.lastWeek.morning ? '<span style="color:var(--success)">↓ Losing</span>' : summary.thisWeek.morning > summary.lastWeek.morning ? '<span style="color:var(--danger)">↑ Gaining</span>' : '<span style="color:var(--text-muted)">→ Stable</span>')
                             : '<span style="color:var(--text-muted)">Need more data</span>'}
                     </div>
                 </div>
@@ -354,125 +355,17 @@ function renderHistory() {
         </div>`;
     }).join('');
 }
-function generateInsight(entries, settings) {
-    if (!entries || entries.length === 0) {
-        return { type: 'neutral', icon: '💡', text: 'Start logging your weight daily to unlock personalized insights and trend predictions.' };
-    }
-
-    const morningEntries = entries.filter(e => e.morning != null);
-    const nightEntries = entries.filter(e => e.night != null);
-    const insights = [];
-
-    // 1. Streak
-    const streak = getStreak(entries);
-    if (streak >= 3) {
-        insights.push({ type: 'streak', icon: '🔥', text: `${streak}-day logging streak! Consistency is the #1 driver of results.` });
-    }
-
-    // 2. Weekly trend
-    const weekly = getWeeklyChange(entries);
-    if (weekly && weekly.lastWeek && weekly.thisWeek.morning != null && weekly.lastWeek.morning != null) {
-        const diff = weekly.thisWeek.morning - weekly.lastWeek.morning;
-        if (diff < -0.3) {
-            insights.push({ type: 'positive', icon: '📉', text: `Great week! Morning weight down ${Math.abs(diff).toFixed(1)} kg from last week.` });
-        } else if (diff > 0.3) {
-            insights.push({ type: 'warning', icon: '📈', text: `Morning weight up ${diff.toFixed(1)} kg this week. Review evening meals and sodium.` });
-        } else if (weekly.thisWeek.count >= 5) {
-            insights.push({ type: 'neutral', icon: '⚖️', text: 'Weight stable this week. Small tweaks can break the plateau.' });
-        }
-    }
-
-    // 3. Goal ETA
-    if (settings.goalWeight && morningEntries.length >= 2) {
-        const current = morningEntries[morningEntries.length - 1].morning;
-        const first = morningEntries[0].morning;
-        const remaining = current - settings.goalWeight;
-        const totalChange = current - first;
-        const daysTracked = Math.max(1, (new Date(morningEntries[morningEntries.length - 1].date) - new Date(morningEntries[0].date)) / (1000 * 60 * 60 * 24));
-        const dailyRate = totalChange / daysTracked;
-
-        if (Math.abs(remaining) < 0.5) {
-            insights.push({ type: 'success', icon: '🎯', text: 'You are at your goal weight! Switch to maintenance mode.' });
-        } else if ((settings.goalWeight < first && dailyRate < 0) || (settings.goalWeight > first && dailyRate > 0)) {
-            const daysToGoal = Math.abs(remaining / dailyRate);
-            if (daysToGoal < 30) {
-                insights.push({ type: 'positive', icon: '🚀', text: `On track! At this pace, you'll hit your goal in ~${Math.round(daysToGoal)} days.` });
-            } else {
-                insights.push({ type: 'positive', icon: '📅', text: `Steady progress. Keep this up for ~${Math.round(daysToGoal / 7)} more weeks.` });
-            }
-        } else if (dailyRate !== 0 && daysTracked >= 7) {
-            insights.push({ type: 'warning', icon: '🔄', text: `Trending away from goal. Time to adjust calories or activity.` });
-        }
-    }
-
-    // 4. Daily swing
-    const swings = entries.filter(e => e.morning != null && e.night != null).map(e => e.night - e.morning);
-    if (swings.length >= 3) {
-        const avgSwing = swings.reduce((a, b) => a + b, 0) / swings.length;
-        if (avgSwing > 1.5) {
-            insights.push({ type: 'info', icon: '🌙', text: `High daily swing (${avgSwing.toFixed(1)} kg). Try lighter evening meals and less salt.` });
-        } else if (avgSwing < 0.6) {
-            insights.push({ type: 'positive', icon: '✅', text: `Low daily variance (${avgSwing.toFixed(1)} kg) — your routine is dialed in.` });
-        }
-    }
-
-    // 5. Plateau detection
-    if (morningEntries.length >= 7) {
-        const last7 = morningEntries.slice(-7).map(e => e.morning);
-        const range = Math.max(...last7) - Math.min(...last7);
-        if (range < 0.3) {
-            insights.push({ type: 'neutral', icon: '🛑', text: '7-day plateau detected. Try a diet break, more steps, or better sleep.' });
-        }
-    }
-
-    // 6. Best weigh-in day
-    if (entries.length >= 7) {
-        const dayMap = {};
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        morningEntries.forEach(e => {
-            const d = new Date(e.date + 'T00:00:00').getDay();
-            if (!dayMap[d]) dayMap[d] = [];
-            dayMap[d].push(e.morning);
-        });
-        let bestDay = null, bestAvg = Infinity;
-        Object.entries(dayMap).forEach(([idx, vals]) => {
-            if (vals.length >= 2) {
-                const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-                if (avg < bestAvg) { bestAvg = avg; bestDay = dayNames[idx]; }
-            }
-        });
-        if (bestDay) {
-            insights.push({ type: 'info', icon: '📊', text: `Your lowest morning weights tend to happen on ${bestDay}s.` });
-        }
-    }
-
-    if (insights.length === 0) {
-        return { type: 'neutral', icon: '💡', text: 'Keep logging daily. Insights sharpen after 3+ entries.' };
-    }
-
-    const priority = { success: 0, positive: 1, warning: 2, streak: 3, info: 4, neutral: 5 };
-    insights.sort((a, b) => priority[a.type] - priority[b.type]);
-    return insights[0];
-}
 
 function renderInsight() {
     const card = document.getElementById('insightCard');
-    const icon = document.getElementById('insightIcon');
-    const text = document.getElementById('insightText');
-    if (!card || !icon || !text) return;
-
-    const settings = loadSettings();
-    const insight = generateInsight(entries, settings);
-
-    card.className = 'insight-card ' + insight.type;
-    icon.textContent = insight.icon;
-    text.textContent = insight.text;
+    if (!card) return;
+    // Default state until user taps
 }
 
 function renderAll() {
     renderStats();
     renderWeekly();
-    renderInsight();        // <-- ADD THIS
+    renderInsight();
     const filtered = filterEntriesByTime(entries, currentTimeFilter);
     renderChart(filtered);
     renderHistory();
@@ -493,12 +386,10 @@ function openSettingsSheet() {
     const settings = loadSettings();
     document.getElementById('settingHeight').value = settings.heightCm || '';
     document.getElementById('settingGoal').value = settings.goalWeight || '';
-    
-    // Show signed-in email in settings title
     const user = firebase.auth().currentUser;
     const email = user ? user.email : 'Not signed in';
-    document.querySelector('#settingsSheet .sheet-title').textContent = 'Settings — ' + email;
-    
+    const title = document.querySelector('#settingsSheet .sheet-title');
+    if (title) title.textContent = 'Settings — ' + email;
     openSheet('settingsSheet');
 }
 
@@ -545,7 +436,7 @@ function editEntry(id) {
     const e = entries.find(x => x.id === id);
     if (!e) return;
     document.getElementById('date').value = e.date;
-    
+
     if (e.morning != null) {
         setTimeOfDay('morning');
         document.getElementById('weight').value = e.morning;
@@ -556,7 +447,7 @@ function editEntry(id) {
         setTimeOfDay('morning');
         document.getElementById('weight').value = '';
     }
-    
+
     editingId = id;
     document.getElementById('sheetTitle').textContent = 'Edit Entry';
     document.getElementById('submitBtn').textContent = 'Update';
@@ -613,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('#settingsSheet input').forEach(i => {
         i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSettingsSave(); });
     });
-    
+
     loadLocal();
     renderAll();
     initFirebase();
