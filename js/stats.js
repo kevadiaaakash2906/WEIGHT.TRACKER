@@ -18,9 +18,20 @@ function getStreak(entries) {
 
 function getTrend(entries) {
     if (!entries || entries.length < 2) return null;
-    const l = entries[entries.length - 1];
-    const p = entries[entries.length - 2];
-    return { morning: l.morning - p.morning, night: l.night - p.night };
+    const withMorning = entries.filter(e => e.morning !== null && e.morning !== undefined);
+    const withNight = entries.filter(e => e.night !== null && e.night !== undefined);
+    const result = {};
+    if (withMorning.length >= 2) {
+        result.morning = withMorning[withMorning.length - 1].morning - withMorning[withMorning.length - 2].morning;
+    } else {
+        result.morning = null;
+    }
+    if (withNight.length >= 2) {
+        result.night = withNight[withNight.length - 1].night - withNight[withNight.length - 2].night;
+    } else {
+        result.night = null;
+    }
+    return result;
 }
 
 function getWeeklyChange(entries) {
@@ -40,15 +51,20 @@ function getWeeklyChange(entries) {
 
     if (thisWeek.length === 0) return null;
 
-    const thisAvgM = thisWeek.reduce((s, e) => s + e.morning, 0) / thisWeek.length;
-    const thisAvgN = thisWeek.reduce((s, e) => s + e.night, 0) / thisWeek.length;
-    const thisAvgDiff = thisAvgN - thisAvgM;
+    const thisMorning = thisWeek.filter(e => e.morning !== null);
+    const thisNight = thisWeek.filter(e => e.night !== null);
+    const lastMorning = lastWeek.filter(e => e.morning !== null);
+    const lastNight = lastWeek.filter(e => e.night !== null);
+
+    const thisAvgM = thisMorning.length > 0 ? thisMorning.reduce((s, e) => s + e.morning, 0) / thisMorning.length : null;
+    const thisAvgN = thisNight.length > 0 ? thisNight.reduce((s, e) => s + e.night, 0) / thisNight.length : null;
+    const thisAvgDiff = (thisAvgM !== null && thisAvgN !== null) ? thisAvgN - thisAvgM : null;
 
     let lastAvgM = null, lastAvgN = null, lastAvgDiff = null;
     if (lastWeek.length > 0) {
-        lastAvgM = lastWeek.reduce((s, e) => s + e.morning, 0) / lastWeek.length;
-        lastAvgN = lastWeek.reduce((s, e) => s + e.night, 0) / lastWeek.length;
-        lastAvgDiff = lastAvgN - lastAvgM;
+        lastAvgM = lastMorning.length > 0 ? lastMorning.reduce((s, e) => s + e.morning, 0) / lastMorning.length : null;
+        lastAvgN = lastNight.length > 0 ? lastNight.reduce((s, e) => s + e.night, 0) / lastNight.length : null;
+        lastAvgDiff = (lastAvgM !== null && lastAvgN !== null) ? lastAvgN - lastAvgM : null;
     }
 
     return {
@@ -73,9 +89,11 @@ function getBMICategory(bmi) {
 function getGoalProgress(entries, goalWeight, heightCm) {
     if (!entries || entries.length === 0 || !goalWeight) return null;
 
-    // Use morning weight as primary
-    const current = entries[entries.length - 1].morning;
-    const first = entries[0].morning;
+    const morningEntries = entries.filter(e => e.morning !== null && e.morning !== undefined);
+    if (morningEntries.length === 0) return null;
+
+    const current = morningEntries[morningEntries.length - 1].morning;
+    const first = morningEntries[0].morning;
 
     const totalChange = current - first;
     const remaining = current - goalWeight;
@@ -86,16 +104,14 @@ function getGoalProgress(entries, goalWeight, heightCm) {
     let percent = 0;
     if (totalDistance > 0) {
         percent = Math.min(100, Math.max(0, (progressDistance / totalDistance) * 100));
-        // If we went past the goal, cap at 100
         if (direction === 'lose' && current <= goalWeight) percent = 100;
         if (direction === 'gain' && current >= goalWeight) percent = 100;
     }
 
-    // Estimate days to goal based on weekly rate
     let daysToGoal = null;
-    if (entries.length >= 7) {
+    if (morningEntries.length >= 7) {
         const weekly = getWeeklyChange(entries);
-        if (weekly && weekly.lastWeek) {
+        if (weekly && weekly.lastWeek && weekly.thisWeek.morning !== null && weekly.lastWeek.morning !== null) {
             const weeklyChange = weekly.thisWeek.morning - weekly.lastWeek.morning;
             if (weeklyChange !== 0) {
                 const weeksToGoal = remaining / weeklyChange;
