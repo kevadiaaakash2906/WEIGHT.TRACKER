@@ -40,54 +40,75 @@ function renderChart(entries) {
     const morningData = entries.map(e => e.morning !== null && e.morning !== undefined ? e.morning : null);
     const nightData = entries.map(e => e.night !== null && e.night !== undefined ? e.night : null);
 
+    // Goal line
+    const settings = typeof loadSettings === 'function' ? loadSettings() : {};
+    const goalWeight = settings.goalWeight || null;
+    const datasets = [
+        {
+            label: 'Morning',
+            data: morningData,
+            borderColor: colors.morning,
+            backgroundColor: (ctx) => {
+                const c = ctx.chart.ctx;
+                const g = c.createLinearGradient(0, 0, 0, 210);
+                g.addColorStop(0, colors.morningFillStart);
+                g.addColorStop(1, colors.morningFillEnd);
+                return g;
+            },
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: colors.morning,
+            pointBorderColor: colors.pointBorder,
+            pointBorderWidth: 3,
+            pointHoverRadius: 6,
+            tension: .4,
+            fill: true,
+            spanGaps: true
+        },
+        {
+            label: 'Night',
+            data: nightData,
+            borderColor: colors.night,
+            backgroundColor: (ctx) => {
+                const c = ctx.chart.ctx;
+                const g = c.createLinearGradient(0, 0, 0, 210);
+                g.addColorStop(0, colors.nightFillStart);
+                g.addColorStop(1, colors.nightFillEnd);
+                return g;
+            },
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: colors.night,
+            pointBorderColor: colors.pointBorder,
+            pointBorderWidth: 3,
+            pointHoverRadius: 6,
+            tension: .4,
+            fill: true,
+            spanGaps: true
+        }
+    ];
+
+    // Add goal line dataset if goal is set
+    if (goalWeight) {
+        datasets.push({
+            label: 'Goal',
+            data: new Array(labels.length).fill(goalWeight),
+            borderColor: 'rgba(244,114,182,.5)',
+            borderWidth: 2,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false,
+            tension: 0,
+            order: 0
+        });
+    }
+
     chartInstance = new Chart(context, {
         type: 'line',
         data: {
             labels,
-            datasets: [
-                {
-                    label: 'Morning',
-                    data: morningData,
-                    borderColor: colors.morning,
-                    backgroundColor: (ctx) => {
-                        const c = ctx.chart.ctx;
-                        const g = c.createLinearGradient(0, 0, 0, 210);
-                        g.addColorStop(0, colors.morningFillStart);
-                        g.addColorStop(1, colors.morningFillEnd);
-                        return g;
-                    },
-                    borderWidth: 3,
-                    pointRadius: 4,
-                    pointBackgroundColor: colors.morning,
-                    pointBorderColor: colors.pointBorder,
-                    pointBorderWidth: 3,
-                    pointHoverRadius: 6,
-                    tension: .4,
-                    fill: true,
-                    spanGaps: true
-                },
-                {
-                    label: 'Night',
-                    data: nightData,
-                    borderColor: colors.night,
-                    backgroundColor: (ctx) => {
-                        const c = ctx.chart.ctx;
-                        const g = c.createLinearGradient(0, 0, 0, 210);
-                        g.addColorStop(0, colors.nightFillStart);
-                        g.addColorStop(1, colors.nightFillEnd);
-                        return g;
-                    },
-                    borderWidth: 3,
-                    pointRadius: 4,
-                    pointBackgroundColor: colors.night,
-                    pointBorderColor: colors.pointBorder,
-                    pointBorderWidth: 3,
-                    pointHoverRadius: 6,
-                    tension: .4,
-                    fill: true,
-                    spanGaps: true
-                }
-            ]
+            datasets
         },
         options: {
             responsive: true,
@@ -109,6 +130,7 @@ function renderChart(entries) {
                     callbacks: {
                         label: c => {
                             const val = c.parsed.y;
+                            if (c.dataset.label === 'Goal') return 'Goal: ' + val.toFixed(1) + ' kg';
                             return val !== null ? c.dataset.label + ': ' + val.toFixed(1) + ' kg' : null;
                         }
                     }
