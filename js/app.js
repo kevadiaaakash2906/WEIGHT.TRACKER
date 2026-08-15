@@ -37,6 +37,160 @@ function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+function getRelativeDate(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const dTime = d.getTime();
+    if (dTime === today.getTime()) return 'Today';
+    if (dTime === yesterday.getTime()) return 'Yesterday';
+    return null;
+}
+
+function adjustWeight(delta) {
+    const input = document.getElementById('weight');
+    if (!input) return;
+    const current = parseFloat(input.value) || 0;
+    const next = Math.round((current + delta) * 10) / 10;
+    if (next > 0) {
+        input.value = next;
+        hapticFeedback();
+    }
+}
+
+// Pull to refresh
+let pullStartY = 0;
+let pullCurrentY = 0;
+let isPulling = false;
+
+function initPullToRefresh() {
+    const app = document.querySelector('.app');
+    const pullRefresh = document.getElementById('pullRefresh');
+    if (!app || !pullRefresh) return;
+
+    app.addEventListener('touchstart', e => {
+        if (window.scrollY === 0) {
+            pullStartY = e.touches[0].clientY;
+            isPulling = true;
+        }
+    }, { passive: true });
+
+    app.addEventListener('touchmove', e => {
+        if (!isPulling) return;
+        pullCurrentY = e.touches[0].clientY;
+        const diff = pullCurrentY - pullStartY;
+        if (diff > 0 && diff < 120) {
+            pullRefresh.style.transform = 'translateY(' + (diff - 50) + 'px)';
+            pullRefresh.classList.add('visible');
+            const text = document.getElementById('pullText');
+            if (text) text.textContent = diff > 80 ? 'Release to refresh' : 'Pull to refresh';
+        }
+    }, { passive: true });
+
+    app.addEventListener('touchend', () => {
+        if (!isPulling) return;
+        const diff = pullCurrentY - pullStartY;
+        pullRefresh.style.transform = '';
+        pullRefresh.classList.remove('visible');
+        isPulling = false;
+
+        if (diff > 80) {
+            const spinner = document.getElementById('pullSpinner');
+            const text = document.getElementById('pullText');
+            if (spinner) spinner.parentElement.classList.add('refreshing');
+            if (text) text.textContent = 'Syncing...';
+            pullRefresh.classList.add('visible');
+
+            // Force re-listen to Firestore or trigger sync
+            if (db && userId) {
+                // Trigger a fresh read
+                db.collection('users').doc(userId).collection('entries').get()
+                    .then(() => {
+                        if (text) text.textContent = 'Synced!';
+                        setTimeout(() => pullRefresh.classList.remove('visible', 'refreshing'), 800);
+                    })
+                    .catch(() => {
+                        if (text) text.textContent = 'Offline';
+                        setTimeout(() => pullRefresh.classList.remove('visible', 'refreshing'), 800);
+                    });
+            } else {
+                renderAll();
+                if (text) text.textContent = 'Refreshed';
+                setTimeout(() => pullRefresh.classList.remove('visible', 'refreshing'), 800);
+            }
+        }
+    });
+}
+
+// Swipe to delete
+function initSwipeOnCard(cardWrap) {
+    let startX = 0;
+    let currentX = 0;
+    let isSwiping = false;
+    const card = cardWrap.querySelector('.entry-card');
+    if (!card) return;
+
+    card.addEventListener('touchstart', e => {
+        startX = e.touches[0].clientX;
+        isSwiping = true;
+    }, { passive: true });
+
+    card.addEventListener('touchmove', e => {
+        if (!isSwiping) return;
+        currentX = e.touches[0].clientX;
+        const diff = currentX - startX;
+        if (diff < 0 && diff > -100) {
+            card.style.transform = 'translateX(' + diff + 'px)';
+        } else if (diff >= 0) {
+            card.style.transform = 'translateX(0px)';
+        }
+    }, { passive: true });
+
+    card.addEventListener('touchend', () => {
+        if (!isSwiping) return;
+        isSwiping = false;
+        const diff = currentX - startX;
+        if (diff < -60) {
+            card.classList.add('swiped');
+            card.style.transform = '';
+            // Auto-close after 3 seconds
+            setTimeout(() => {
+                if (card.classList.contains('swiped')) {
+                    card.classList.remove('swiped');
+                }
+            }, 3000);
+        } else {
+            card.classList.remove('swiped');
+            card.style.transform = '';
+        }
+    });
+
+    // Tap to close swipe
+    card.addEventListener('click', () => {
+        if (card.classList.contains('swiped')) {
+            card.classList.remove('swiped');
+        }
+    });
+}
+
+function animateValue(el, start, end, duration, suffix) {
+    if (!el) return;
+    const range = end - start;
+    const startTime = performance.now();
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const current = start + range * ease;
+        el.textContent = current.toFixed(1) + (suffix || '');
+        if (progress < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+}
+
+
 function validateEntry(date, weight) {
     const errors = [];
     if (!date) errors.push('Date is required');
@@ -539,10 +693,18 @@ function renderStats() {
     const avgM = morningEntries.length > 0 ? morningEntries.reduce((s, e) => s + e.morning, 0) / morningEntries.length : null;
     const avgN = nightEntries.length > 0 ? nightEntries.reduce((s, e) => s + e.night, 0) / nightEntries.length : null;
     const avgD = (avgM != null && avgN != null) ? avgN - avgM : null;
-    document.getElementById('avgMorning').textContent = avgM != null ? avgM.toFixed(1) : '--';
-    document.getElementById('avgNight').textContent = avgN != null ? avgN.toFixed(1) : '--';
-    document.getElementById('avgDiff').textContent = avgD != null ? (avgD >= 0 ? '+' : '') + avgD.toFixed(1) : '--';
-    document.getElementById('entryCount').textContent = entries.length;
+    const avgMEl = document.getElementById('avgMorning');
+    const avgNEl = document.getElementById('avgNight');
+    const avgDEl = document.getElementById('avgDiff');
+    const countEl = document.getElementById('entryCount');
+
+    if (avgM != null) animateValue(avgMEl, parseFloat(avgMEl.textContent) || 0, avgM, 600, '');
+    else avgMEl.textContent = '--';
+    if (avgN != null) animateValue(avgNEl, parseFloat(avgNEl.textContent) || 0, avgN, 600, '');
+    else avgNEl.textContent = '--';
+    if (avgD != null) avgDEl.textContent = (avgD >= 0 ? '+' : '') + avgD.toFixed(1);
+    else avgDEl.textContent = '--';
+    if (countEl) countEl.textContent = entries.length;
     const streak = getStreak(entries);
     const streakEl = document.getElementById('streakDisplay');
     if (streakEl) streakEl.innerHTML = streak > 1
@@ -858,6 +1020,7 @@ window.addEventListener('offline', () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    initPullToRefresh();
     document.querySelectorAll('#bottomSheet input').forEach(i => {
         i.addEventListener('keypress', e => { if (e.key === 'Enter') handleSubmit(); });
     });
