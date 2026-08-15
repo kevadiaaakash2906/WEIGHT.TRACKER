@@ -69,20 +69,6 @@ function handleLogout() {
     }
 }
 
-function showAuthScreen() {
-    document.getElementById('loadingOverlay').classList.add('hidden');
-    document.getElementById('authOverlay').style.display = 'flex';
-    document.getElementById('mainApp').style.display = 'none';
-    document.getElementById('fabBtn').style.display = 'none';
-}
-
-function showApp() {
-    document.getElementById('loadingOverlay').classList.add('hidden');
-    document.getElementById('authOverlay').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
-    document.getElementById('fabBtn').style.display = 'flex';
-}
-
 // Firebase
 function initFirebase() {
     firebase.initializeApp(firebaseConfig);
@@ -97,13 +83,15 @@ function initFirebase() {
     firebase.auth().onAuthStateChanged(user => {
         if (user) {
             userId = user.uid;
-            showApp();
             document.getElementById('loadingText').textContent = 'Loading your data...';
             listenToFirestore();
         } else {
             userId = null;
             if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-            showAuthScreen();
+            document.getElementById('loadingText').textContent = 'Redirecting to sign-in...';
+            setTimeout(() => {
+                signInWithGoogle();
+            }, 500);
         }
     });
 }
@@ -356,16 +344,9 @@ function renderHistory() {
     }).join('');
 }
 
-function renderInsight() {
-    const card = document.getElementById('insightCard');
-    if (!card) return;
-    // Default state until user taps
-}
-
 function renderAll() {
     renderStats();
     renderWeekly();
-    renderInsight();
     const filtered = filterEntriesByTime(entries, currentTimeFilter);
     renderChart(filtered);
     renderHistory();
