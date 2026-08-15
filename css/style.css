@@ -660,3 +660,7 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
     color: var(--text);
     line-height: 1.45;
 }
+/* Fix: prevent diff text from overlapping action buttons */
+.entry-card .diff-section {
+    padding-right: 70px;
+}
