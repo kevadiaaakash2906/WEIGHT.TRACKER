@@ -238,14 +238,93 @@ function setTimeOfDay(tod) {
     }
 }
 
+function isStandalonePWA() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true ||
+           document.referrer.includes('android-app://');
+}
+
 function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
-    firebase.auth().signInWithPopup(provider)
-        .catch(err => { console.error('Sign-in error:', err); showToast('Sign-in failed', true); });
+    const btn = document.getElementById('signInBtn');
+    if (btn) { btn.textContent = 'Signing in...'; btn.disabled = true; }
+
+    if (isStandalonePWA()) {
+        // iOS/Android PWA: use redirect (popup doesn't work in standalone)
+        firebase.auth().signInWithRedirect(provider)
+            .catch(err => {
+                console.error('Redirect sign-in error:', err);
+                if (btn) { btn.textContent = 'Sign In with Google'; btn.disabled = false; }
+                showToast('Sign-in failed: ' + err.message, true);
+            });
+    } else {
+        // Desktop / Mobile browser: use popup
+        firebase.auth().signInWithPopup(provider)
+            .catch(err => {
+                console.error('Popup sign-in error:', err);
+                if (btn) { btn.textContent = 'Sign In with Google'; btn.disabled = false; }
+                showToast('Sign-in failed: ' + err.message, true);
+            });
+    }
 }
 
 function handleLogout() {
-    if (confirm('Log out? Your data will remain in the cloud.')) firebase.auth().signOut();
+    if (confirm('Log out? Your data will remain in the cloud.')) {
+        firebase.auth().signOut();
+    }
+}
+
+function showSignInScreen() {
+    hideLoading();
+    const existing = document.getElementById('signInScreen');
+    if (existing) return;
+
+    const screen = document.createElement('div');
+    screen.id = 'signInScreen';
+    screen.innerHTML = '<div style="' +
+        'position:fixed;inset:0;z-index:999;' +
+        'background:var(--bg);' +
+        'display:flex;flex-direction:column;' +
+        'align-items:center;justify-content:center;' +
+        'padding:24px;text-align:center;' +
+        '">' +
+        '<div style="width:64px;height:64px;border-radius:20px;' +
+        'background:linear-gradient(135deg,var(--accent),#0ea5e9);' +
+        'display:flex;align-items:center;justify-content:center;' +
+        'margin-bottom:24px;box-shadow:0 8px30px rgba(34,211,238,.3)">' +
+        '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' +
+        '</svg>' +
+        '</div>' +
+        '<h2 style="font-size:1.4rem;font-weight:800;margin-bottom:8px;color:var(--text)">Weight Tracker</h2>' +
+        '<p style="color:var(--text-muted);font-size:.9rem;margin-bottom:32px;max-width:280px;line-height:1.5">' +
+        'Sign in to sync your data across devices and keep it backed up.' +
+        '</p>' +
+        '<button id="signInBtn" style="' +
+        'width:100%;max-width:320px;padding:16px 24px;' +
+        'border-radius:16px;border:none;' +
+        'background:linear-gradient(135deg,var(--accent),#0ea5e9);' +
+        'color:#0f172a;font-size:1rem;font-weight:700;font-family:inherit;' +
+        'cursor:pointer;transition:all .2s;' +
+        'display:flex;align-items:center;justify-content:center;gap:10px;' +
+        '" onclick="signInWithGoogle()">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>' +
+        '<polyline points="10 17 15 12 10 7"/>' +
+        '<line x1="15" y1="12" x2="3" y2="12"/>' +
+        '</svg>' +
+        'Sign In with Google' +
+        '</button>' +
+        '<p style="color:var(--text-muted);font-size:.75rem;margin-top:20px;opacity:.7">' +
+        'Your data is private and stored securely.' +
+        '</p>' +
+        '</div>';
+    document.body.appendChild(screen);
+}
+
+function hideSignInScreen() {
+    const screen = document.getElementById('signInScreen');
+    if (screen) screen.remove();
 }
 
 function initFirebase() {
@@ -256,16 +335,32 @@ function initFirebase() {
             if (err.code === 'failed-precondition') console.log('Persistence: multiple tabs');
             else if (err.code === 'unimplemented') console.log('Persistence not supported');
         });
+
+    // Handle redirect result first (for iOS PWA coming back from Google sign-in)
+    firebase.auth().getRedirectResult()
+        .then(result => {
+            if (result.user) {
+                console.log('Redirect sign-in successful');
+            }
+        })
+        .catch(err => {
+            console.error('Redirect result error:', err);
+            showToast('Sign-in failed: ' + err.message, true);
+            const btn = document.getElementById('signInBtn');
+            if (btn) { btn.textContent = 'Sign In with Google'; btn.disabled = false; }
+        });
+
     firebase.auth().onAuthStateChanged(user => {
         if (user) {
             userId = user.uid;
+            hideSignInScreen();
             document.getElementById('loadingText').textContent = 'Loading your data...';
             listenToFirestore();
         } else {
             userId = null;
             if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-            document.getElementById('loadingText').textContent = 'Redirecting to sign-in...';
-            setTimeout(() => signInWithGoogle(), 500);
+            // Show sign-in button instead of auto-redirect
+            showSignInScreen();
         }
     });
 }
