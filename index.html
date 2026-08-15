@@ -63,6 +63,11 @@
                 <div class="goal-progress-bar"><div class="goal-progress-fill" id="goalProgress" style="width:0%"></div></div>
                 <div class="goal-days" id="goalDays">Set a goal</div>
             </div>
+            <div class="stat-card weekly">
+                <div class="label">7-Day Avg</div>
+                <div class="value" id="weeklyAvgMorning">--</div>
+                <div class="trend-mini" id="weeklyAvgSub"></div>
+            </div>
             <div class="stat-card count">
                 <div class="label">Entries</div>
                 <div class="value" id="entryCount">0</div>
@@ -72,6 +77,29 @@
 
         <div id="weeklySummary"></div>
         <div id="insightsContainer"></div>
+
+        <div class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Progress Photos
+        </div>
+        <div class="photos-section" id="photosSection">
+            <div class="photos-empty" id="photosEmpty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <p>No progress photos yet.<br>Tap <strong>+</strong> in the add sheet to attach one.</p>
+            </div>
+            <div class="photos-grid" id="photosGrid"></div>
+            <div class="photo-compare" id="photoCompare" style="display:none">
+                <div class="compare-labels">
+                    <span id="compareBeforeLabel">Before</span>
+                    <span id="compareAfterLabel">After</span>
+                </div>
+                <div class="compare-images">
+                    <img id="compareBeforeImg" src="" alt="Before">
+                    <img id="compareAfterImg" src="" alt="After">
+                </div>
+                <button class="btn btn-secondary" onclick="closePhotoCompare()" style="width:100%;margin-top:12px;">Close Comparison</button>
+            </div>
+        </div>
 
         <div class="section-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
@@ -133,6 +161,23 @@
             <div class="form-group">
                 <label for="weight" id="weightLabel">Weight (Morning) (kg)</label>
                 <input type="number" id="weight" step="0.1" placeholder="e.g. 72.5" required inputmode="decimal">
+            </div>
+            <div class="form-group">
+                <label>Progress Photo (optional)</label>
+                <div class="photo-upload" id="photoUploadArea">
+                    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(event)">
+                    <div class="photo-upload-placeholder" id="photoPlaceholder" onclick="document.getElementById('photoInput').click()">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <span>Tap to add photo</span>
+                    </div>
+                    <div class="photo-preview" id="photoPreview" style="display:none">
+                        <img id="photoPreviewImg" src="" alt="Preview">
+                        <button class="photo-remove" onclick="removePhoto()" aria-label="Remove photo">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="photo-hint">One photo per week is enough. Same lighting, same angle.</div>
             </div>
             <div class="quick-add-group">
                 <span class="quick-add-label">Quick add:</span>
