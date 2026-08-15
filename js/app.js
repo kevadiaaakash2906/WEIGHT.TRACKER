@@ -244,6 +244,10 @@ function isStandalonePWA() {
            document.referrer.includes('android-app://');
 }
 
+function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
 function signInWithGoogle() {
     const provider = new firebase.auth.GoogleAuthProvider();
     const btn = document.getElementById('signInBtn');
@@ -251,9 +255,12 @@ function signInWithGoogle() {
 
     if (isStandalonePWA()) {
         // iOS/Android PWA: use redirect (popup doesn't work in standalone)
+        // Set a flag so we know we're returning from redirect
+        localStorage.setItem('auth_redirect_pending', Date.now().toString());
         firebase.auth().signInWithRedirect(provider)
             .catch(err => {
                 console.error('Redirect sign-in error:', err);
+                localStorage.removeItem('auth_redirect_pending');
                 if (btn) { btn.textContent = 'Sign In with Google'; btn.disabled = false; }
                 showToast('Sign-in failed: ' + err.message, true);
             });
@@ -274,10 +281,10 @@ function handleLogout() {
     }
 }
 
-function showSignInScreen() {
+function showSignInScreen(message, showSafariFallback) {
     hideLoading();
     const existing = document.getElementById('signInScreen');
-    if (existing) return;
+    if (existing) existing.remove();
 
     const screen = document.createElement('div');
     screen.id = 'signInScreen';
@@ -291,15 +298,16 @@ function showSignInScreen() {
         '<div style="width:64px;height:64px;border-radius:20px;' +
         'background:linear-gradient(135deg,var(--accent),#0ea5e9);' +
         'display:flex;align-items:center;justify-content:center;' +
-        'margin-bottom:24px;box-shadow:0 8px30px rgba(34,211,238,.3)">' +
+        'margin-bottom:24px;box-shadow:0 8px 30px rgba(34,211,238,.3)">' +
         '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
         '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' +
         '</svg>' +
         '</div>' +
         '<h2 style="font-size:1.4rem;font-weight:800;margin-bottom:8px;color:var(--text)">Weight Tracker</h2>' +
-        '<p style="color:var(--text-muted);font-size:.9rem;margin-bottom:32px;max-width:280px;line-height:1.5">' +
+        '<p style="color:var(--text-muted);font-size:.9rem;margin-bottom:8px;max-width:280px;line-height:1.5">' +
         'Sign in to sync your data across devices and keep it backed up.' +
         '</p>' +
+        (message ? '<p style="color:var(--danger);font-size:.8rem;margin-bottom:16px;max-width:300px;line-height:1.4">' + message + '</p>' : '<div style="height:12px"></div>') +
         '<button id="signInBtn" style="' +
         'width:100%;max-width:320px;padding:16px 24px;' +
         'border-radius:16px;border:none;' +
@@ -315,16 +323,57 @@ function showSignInScreen() {
         '</svg>' +
         'Sign In with Google' +
         '</button>' +
-        '<p style="color:var(--text-muted);font-size:.75rem;margin-top:20px;opacity:.7">' +
-        'Your data is private and stored securely.' +
+        '<button onclick="signInAnonymous()" style="' +
+        'width:100%;max-width:320px;padding:14px 24px;margin-top:10px;' +
+        'border-radius:16px;border:1.5px solid var(--border);' +
+        'background:var(--surface-3);' +
+        'color:var(--text);font-size:.9rem;font-weight:600;font-family:inherit;' +
+        'cursor:pointer;transition:all .2s;' +
+        'display:flex;align-items:center;justify-content:center;gap:8px;' +
+        '">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>' +
+        '<circle cx="12" cy="7" r="4"/>' +
+        '</svg>' +
+        'Use Without Account' +
+        '</button>' +
+        (showSafariFallback ? 
+        '<button onclick="openInSafari()" style="' +
+        'width:100%;max-width:320px;padding:12px 24px;margin-top:8px;' +
+        'border-radius:16px;border:none;' +
+        'background:transparent;' +
+        'color:var(--text-muted);font-size:.8rem;font-weight:500;font-family:inherit;' +
+        'cursor:pointer;' +
+        '">Or open in Safari to sign in</button>' : '') +
+        '<p style="color:var(--text-muted);font-size:.7rem;margin-top:16px;opacity:.6;max-width:280px;line-height:1.4">' +
+        'Without an account, data stays on this device only. You can sign in later to enable cloud sync.' +
         '</p>' +
         '</div>';
     document.body.appendChild(screen);
 }
 
+function signInAnonymous() {
+    const btn = event.target.closest('button');
+    if (btn) { btn.textContent = 'Starting...'; btn.disabled = true; }
+    firebase.auth().signInAnonymously()
+        .then(() => {
+            showToast('Ready to go!');
+        })
+        .catch(err => {
+            console.error('Anonymous sign-in error:', err);
+            showToast('Could not start: ' + err.message, true);
+            if (btn) { btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Use Without Account'; btn.disabled = false; }
+        });
+}
+
 function hideSignInScreen() {
     const screen = document.getElementById('signInScreen');
     if (screen) screen.remove();
+}
+
+function openInSafari() {
+    // Open the current URL in Safari
+    window.location.href = window.location.href;
 }
 
 function initFirebase() {
@@ -336,21 +385,21 @@ function initFirebase() {
             else if (err.code === 'unimplemented') console.log('Persistence not supported');
         });
 
-    // Handle redirect result first (for iOS PWA coming back from Google sign-in)
-    firebase.auth().getRedirectResult()
-        .then(result => {
-            if (result.user) {
-                console.log('Redirect sign-in successful');
-            }
-        })
-        .catch(err => {
-            console.error('Redirect result error:', err);
-            showToast('Sign-in failed: ' + err.message, true);
-            const btn = document.getElementById('signInBtn');
-            if (btn) { btn.textContent = 'Sign In with Google'; btn.disabled = false; }
-        });
+    // Check if we're returning from a redirect
+    const redirectPending = localStorage.getItem('auth_redirect_pending');
+    const isReturningFromRedirect = redirectPending && (Date.now() - parseInt(redirectPending)) < 300000;
+    if (isReturningFromRedirect) {
+        localStorage.removeItem('auth_redirect_pending');
+    }
 
-    firebase.auth().onAuthStateChanged(user => {
+    let authResolved = false;
+    let authCheckTimeout;
+
+    function onAuthResolved(user) {
+        if (authResolved) return;
+        authResolved = true;
+        clearTimeout(authCheckTimeout);
+
         if (user) {
             userId = user.uid;
             hideSignInScreen();
@@ -359,8 +408,51 @@ function initFirebase() {
         } else {
             userId = null;
             if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-            // Show sign-in button instead of auto-redirect
-            showSignInScreen();
+            // Show sign-in screen with appropriate message
+            if (isReturningFromRedirect && isIOS()) {
+                showSignInScreen(
+                    'iOS PWA sign-in is unreliable. Please open this site in Safari, sign in there, then return here. Or try again.',
+                    true
+                );
+            } else if (isReturningFromRedirect) {
+                showSignInScreen('Sign-in did not complete. Please try again.', false);
+            } else {
+                showSignInScreen(null, false);
+            }
+        }
+    }
+
+    // Handle redirect result first
+    firebase.auth().getRedirectResult()
+        .then(result => {
+            console.log('Redirect result:', result.user ? 'has user' : 'no user');
+            if (result.user) {
+                onAuthResolved(result.user);
+            }
+        })
+        .catch(err => {
+            console.error('Redirect result error:', err);
+            if (isReturningFromRedirect) {
+                showToast('Sign-in failed: ' + err.message, true);
+            }
+        });
+
+    firebase.auth().onAuthStateChanged(user => {
+        if (user) {
+            onAuthResolved(user);
+        } else {
+            // No user yet. If we're returning from redirect, wait a bit
+            // before giving up - Firebase might still be processing.
+            if (isReturningFromRedirect && !authResolved) {
+                document.getElementById('loadingText').textContent = 'Completing sign-in...';
+                authCheckTimeout = setTimeout(() => {
+                    if (!authResolved) {
+                        onAuthResolved(null);
+                    }
+                }, 3000);
+            } else if (!authResolved) {
+                onAuthResolved(null);
+            }
         }
     });
 }
