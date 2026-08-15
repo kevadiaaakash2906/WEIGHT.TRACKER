@@ -983,3 +983,231 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
 @media (max-width: 380px) {
     .photos-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ============================================
+   SKELETON LOADER
+   ============================================ */
+.skeleton-app {
+    width: 100%;
+    max-width: 480px;
+    padding: 0 16px;
+    opacity: .6;
+}
+.skeleton-header {
+    height: 60px;
+    background: var(--surface);
+    border-radius: 16px;
+    margin: 24px auto 16px;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+.skeleton-stats {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+.skeleton-stat {
+    flex: 0 0 140px;
+    height: 90px;
+    background: var(--surface);
+    border-radius: 20px;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+.skeleton-chart {
+    height: 260px;
+    background: var(--surface);
+    border-radius: 24px;
+    margin-bottom: 16px;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+.skeleton-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.skeleton-item {
+    height: 80px;
+    background: var(--surface);
+    border-radius: 20px;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+.skeleton-stat:nth-child(2) { animation-delay: .1s; }
+.skeleton-stat:nth-child(3) { animation-delay: .2s; }
+.skeleton-stat:nth-child(4) { animation-delay: .3s; }
+.skeleton-item:nth-child(2) { animation-delay: .15s; }
+.skeleton-item:nth-child(3) { animation-delay: .3s; }
+@keyframes skeleton-pulse {
+    0%, 100% { opacity: .4; }
+    50% { opacity: .8; }
+}
+
+/* ============================================
+   PULL TO REFRESH
+   ============================================ */
+.pull-refresh {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: .8rem;
+    font-weight: 600;
+    transform: translateY(-100%);
+    transition: transform .2s;
+    z-index: 50;
+    pointer-events: none;
+}
+.pull-refresh.visible {
+    transform: translateY(0);
+}
+.pull-refresh.refreshing .pull-spinner {
+    animation: spin .8s linear infinite;
+    border: 2px solid var(--surface-3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+}
+.pull-spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--surface-3);
+    border-top-color: var(--accent);
+}
+
+/* ============================================
+   WEIGHT STEPPER INPUT
+   ============================================ */
+.weight-input-wrap {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1.5px solid var(--border);
+}
+.weight-input-wrap input {
+    flex: 1;
+    border: none !important;
+    border-radius: 0 !important;
+    text-align: center;
+    font-size: 1.4rem !important;
+    font-weight: 700;
+    padding: 14px 8px !important;
+    background: var(--surface-3);
+}
+.weight-input-wrap input:focus {
+    box-shadow: none !important;
+}
+.stepper-btn {
+    width: 56px;
+    background: var(--surface-2);
+    border: none;
+    color: var(--accent);
+    font-size: 1.4rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+}
+.stepper-btn:active {
+    background: var(--accent);
+    color: #0f172a;
+}
+
+/* ============================================
+   HISTORY SWIPE ACTIONS
+   ============================================ */
+.entry-card-wrap {
+    position: relative;
+    overflow: hidden;
+    border-radius: 20px;
+    margin-bottom: 10px;
+}
+.entry-card-wrap .swipe-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 20px;
+    background: var(--danger);
+    border-radius: 20px;
+    z-index: 0;
+}
+.entry-card-wrap .swipe-bg svg {
+    color: #fff;
+    opacity: .8;
+}
+.entry-card-wrap .entry-card {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 0;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+    user-select: none;
+    touch-action: pan-y;
+}
+.entry-card-wrap .entry-card.swiped {
+    transform: translateX(-80px);
+}
+.entry-card-wrap .entry-card .actions {
+    display: none !important;
+}
+@media (hover: hover) {
+    .entry-card-wrap .entry-card .actions {
+        display: flex !important;
+    }
+}
+
+/* ============================================
+   RELATIVE DATES
+   ============================================ */
+.entry-card .date-relative {
+    font-size: .65rem;
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-top: 2px;
+}
+
+/* ============================================
+   STAT CARD ANIMATIONS
+   ============================================ */
+.stat-card .value {
+    transition: color .3s;
+}
+.stat-card .value.updated {
+    animation: value-pop .4s ease;
+}
+@keyframes value-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); color: var(--accent); }
+    100% { transform: scale(1); }
+}
+
+/* ============================================
+   CHART GOAL LINE
+   ============================================ */
+.chart-goal-label {
+    position: absolute;
+    right: 12px;
+    font-size: .65rem;
+    font-weight: 700;
+    color: var(--goal);
+    background: rgba(244,114,182,.15);
+    padding: 2px 8px;
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 5;
+}
