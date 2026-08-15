@@ -206,3 +206,45 @@ function getHealthAlert(entries) {
     }
     return null;
 }
+
+
+// ============================================
+//  WEEKLY ROLLING AVERAGE
+// ============================================
+
+function getWeeklyRollingAverage(entries, days = 7) {
+    if (!entries || entries.length === 0) return null;
+    const morningEntries = entries.filter(e => e.morning != null);
+    if (morningEntries.length === 0) return null;
+
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const recent = morningEntries.filter(e => new Date(e.date + 'T00:00:00') >= cutoff);
+
+    if (recent.length === 0) {
+        // Fallback to all entries if no recent ones
+        const avg = morningEntries.reduce((s, e) => s + e.morning, 0) / morningEntries.length;
+        return { average: avg, count: morningEntries.length, isAllTime: true };
+    }
+
+    const avg = recent.reduce((s, e) => s + e.morning, 0) / recent.length;
+    return { average: avg, count: recent.length, isAllTime: false };
+}
+
+function getWeeklyRollingAverageNight(entries, days = 7) {
+    if (!entries || entries.length === 0) return null;
+    const nightEntries = entries.filter(e => e.night != null);
+    if (nightEntries.length === 0) return null;
+
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const recent = nightEntries.filter(e => new Date(e.date + 'T00:00:00') >= cutoff);
+
+    if (recent.length === 0) {
+        const avg = nightEntries.reduce((s, e) => s + e.night, 0) / nightEntries.length;
+        return { average: avg, count: nightEntries.length, isAllTime: true };
+    }
+
+    const avg = recent.reduce((s, e) => s + e.night, 0) / recent.length;
+    return { average: avg, count: recent.length, isAllTime: false };
+}

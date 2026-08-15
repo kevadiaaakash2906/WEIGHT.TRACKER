@@ -501,6 +501,7 @@ function renderAll() {
         renderStats();
         renderWeekly();
         renderInsights();
+        renderPhotos();
         const filtered = filterEntriesByTime(entries, currentTimeFilter);
         renderChart(filtered);
         renderHistory();
@@ -512,6 +513,8 @@ function renderAll() {
 
 function openAddSheet() {
     editingId = null;
+    currentPhotoBase64 = null;
+    removePhoto();
     document.getElementById('sheetTitle').textContent = 'Add Entry';
     document.getElementById('submitBtn').textContent = 'Add';
     document.getElementById('date').valueAsDate = new Date();
@@ -556,6 +559,7 @@ async function handleSubmit() {
                 entries[idx].date = d;
                 if (currentTimeOfDay === 'morning') entries[idx].morning = weightVal;
                 else entries[idx].night = weightVal;
+                if (currentPhotoBase64) entries[idx].photo = currentPhotoBase64;
             }
             editingId = null;
             showToast('Updated!');
@@ -565,10 +569,11 @@ async function handleSubmit() {
                 entryId = entries[ex].id;
                 if (currentTimeOfDay === 'morning') entries[ex].morning = weightVal;
                 else entries[ex].night = weightVal;
+                if (currentPhotoBase64) entries[ex].photo = currentPhotoBase64;
                 showToast('Updated!');
             } else {
                 entryId = Date.now().toString();
-                const newEntry = { id: entryId, date: d, morning: null, night: null };
+                const newEntry = { id: entryId, date: d, morning: null, night: null, photo: currentPhotoBase64 || null };
                 if (currentTimeOfDay === 'morning') newEntry.morning = weightVal;
                 else newEntry.night = weightVal;
                 entries.push(newEntry);
@@ -577,6 +582,8 @@ async function handleSubmit() {
         }
         entries.sort((a, b) => new Date(a.date) - new Date(b.date));
         saveLocal();
+        currentPhotoBase64 = null;
+        removePhoto();
         renderAll();
         await saveToFirestore(entries.find(e => e.id === entryId));
         closeSheet();
@@ -674,3 +681,104 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAll();
     initFirebase();
 });
+
+
+// ============================================
+//  PHOTO HANDLING
+// ============================================
+
+let currentPhotoBase64 = null;
+
+function handlePhotoSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+        showToast('Photo too large. Max 3MB.', true);
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        currentPhotoBase64 = e.target.result;
+        showPhotoPreview(currentPhotoBase64);
+        hapticFeedback();
+    };
+    reader.readAsDataURL(file);
+}
+
+function showPhotoPreview(base64) {
+    const preview = document.getElementById('photoPreview');
+    const placeholder = document.getElementById('photoPlaceholder');
+    const img = document.getElementById('photoPreviewImg');
+    if (preview && placeholder && img) {
+        img.src = base64;
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+    }
+}
+
+function removePhoto() {
+    currentPhotoBase64 = null;
+    const preview = document.getElementById('photoPreview');
+    const placeholder = document.getElementById('photoPlaceholder');
+    const input = document.getElementById('photoInput');
+    if (preview) preview.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'flex';
+    if (input) input.value = '';
+}
+
+function getPhotoForDate(dateStr) {
+    const entry = entries.find(e => e.date === dateStr);
+    return entry && entry.photo ? entry.photo : null;
+}
+
+function renderPhotos() {
+    const grid = document.getElementById('photosGrid');
+    const empty = document.getElementById('photosEmpty');
+    if (!grid || !empty) return;
+
+    const photos = entries.filter(e => e.photo).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (photos.length === 0) {
+        grid.style.display = 'none';
+        empty.style.display = 'flex';
+        return;
+    }
+
+    empty.style.display = 'none';
+    grid.style.display = 'grid';
+
+    grid.innerHTML = photos.map((e, i) => {
+        const d = new Date(e.date + 'T00:00:00');
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const isLatest = i === 0;
+        return '<div class="photo-card" onclick="openPhotoCompare(' + i + ')">' +
+            '<img src="' + e.photo + '" alt="Progress photo ' + label + '" loading="lazy">' +
+            '<div class="photo-card-label">' + label + (isLatest ? ' <span class="photo-latest">Latest</span>' : '') + '</div>' +
+        '</div>';
+    }).join('');
+}
+
+function openPhotoCompare(index) {
+    const photos = entries.filter(e => e.photo).sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (photos.length < 2) {
+        showToast('Need at least 2 photos to compare', true);
+        return;
+    }
+    const after = photos[index];
+    const before = photos[index + 1] || photos[photos.length - 1];
+
+    const beforeDate = new Date(before.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const afterDate = new Date(after.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    document.getElementById('compareBeforeLabel').textContent = beforeDate;
+    document.getElementById('compareAfterLabel').textContent = afterDate;
+    document.getElementById('compareBeforeImg').src = before.photo;
+    document.getElementById('compareAfterImg').src = after.photo;
+    document.getElementById('photoCompare').style.display = 'block';
+    document.getElementById('photosGrid').style.display = 'none';
+}
+
+function closePhotoCompare() {
+    document.getElementById('photoCompare').style.display = 'none';
+    document.getElementById('photosGrid').style.display = 'grid';
+}
