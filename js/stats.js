@@ -1,6 +1,7 @@
 // ============================================
 //  STATS CALCULATIONS
 //  - Averages, Streak, Trend, BMI, Weekly Summary, Goal Progress
+//  + Trend Insights, Health Alerts
 // ============================================
 
 function getStreak(entries) {
@@ -74,7 +75,7 @@ function getWeeklyChange(entries) {
 }
 
 function calculateBMI(weightKg, heightCm) {
-    if (!weightKg || !heightCm || heightCm <= 0) return null;
+    if (!weightKg || !heightCm || heightCm <= 0 || weightKg <= 0) return null;
     const heightM = heightCm / 100;
     return weightKg / (heightM * heightM);
 }
@@ -114,7 +115,8 @@ function getGoalProgress(entries, goalWeight, heightCm) {
         if (weekly && weekly.lastWeek && weekly.thisWeek.morning !== null && weekly.lastWeek.morning !== null) {
             const weeklyChange = weekly.thisWeek.morning - weekly.lastWeek.morning;
             if (weeklyChange !== 0) {
-                const weeksToGoal = remaining / weeklyChange;
+                // Fixed: use (goal - current) / weeklyChange for correct sign handling
+                const weeksToGoal = (goalWeight - current) / weeklyChange;
                 if (weeksToGoal > 0) daysToGoal = Math.round(weeksToGoal * 7);
             }
         }
@@ -141,4 +143,66 @@ function filterEntriesByTime(entries, filter) {
     const days = { '7d': 7, '30d': 30, '90d': 90 };
     const cutoff = new Date(now.getTime() - days[filter] * 24 * 60 * 60 * 1000);
     return entries.filter(e => new Date(e.date + 'T00:00:00') >= cutoff);
+}
+
+// ============================================
+//  NEW: Advanced Insights
+// ============================================
+
+function calculateTrendInsight(entries) {
+    if (!entries || entries.length < 14) return null;
+    const morningOnly = entries.filter(e => e.morning !== null && e.morning !== undefined);
+    if (morningOnly.length < 14) return null;
+
+    const n = morningOnly.length;
+    const x = Array.from({ length: n }, (_, i) => i);
+    const y = morningOnly.map(e => e.morning);
+
+    const xMean = x.reduce((a, b) => a + b, 0) / n;
+    const yMean = y.reduce((a, b) => a + b, 0) / n;
+
+    let numerator = 0;
+    let denominator = 0;
+    for (let i = 0; i < n; i++) {
+        numerator += (x[i] - xMean) * (y[i] - yMean);
+        denominator += (x[i] - xMean) ** 2;
+    }
+
+    if (denominator === 0) return null;
+    const slope = numerator / denominator; // kg per entry
+    const slopePerWeek = slope * 7;
+
+    return {
+        trendPerDay: slope,
+        trendPerWeek: slopePerWeek,
+        direction: slopePerWeek < -0.05 ? 'losing' : slopePerWeek > 0.05 ? 'gaining' : 'stable',
+        confidencePercent: Math.min(100, Math.max(0, (n / 30) * 100))
+    };
+}
+
+function getHealthAlert(entries) {
+    if (!entries || entries.length < 7) return null;
+    const summary = getWeeklyChange(entries);
+    if (!summary || !summary.lastWeek) return null;
+
+    const curr = summary.thisWeek.morning;
+    const prev = summary.lastWeek.morning;
+    if (curr == null || prev == null) return null;
+
+    const diff = curr - prev;
+    if (diff >= 2) {
+        return {
+            type: 'warning',
+            icon: '⚠️',
+            message: `Weight up ${diff.toFixed(1)} kg from last week. Check hydration & sodium intake.`
+        };
+    }
+    if (diff <= -2) {
+        return {
+            type: 'positive',
+            icon: '🎉',
+            message: `Great progress! Down ${Math.abs(diff).toFixed(1)} kg from last week.`
+        };
+    }
+    return null;
 }

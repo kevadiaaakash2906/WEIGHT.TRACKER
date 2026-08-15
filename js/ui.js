@@ -1,15 +1,31 @@
 // ============================================
 //  UI HELPERS
 //  - Toasts, Sheets, Sync Status, Loading, Confetti
+//  + Haptic feedback, Toast actions
 // ============================================
 
-function showToast(msg, isError = false) {
+function showToast(msg, isError = false, actionText = null, actionCallback = null) {
     const toast = document.getElementById('toast');
     if (!toast) return;
-    toast.textContent = msg;
-    toast.className = 'toast' + (isError ? ' error' : '');
+
+    let html = escapeHtml(msg);
+    if (actionText && actionCallback) {
+        html += ` <button class="toast-action" onclick="(${actionCallback.toString()})(); hideToast();">${escapeHtml(actionText)}</button>`;
+    }
+
+    toast.innerHTML = html;
+    toast.className = 'toast' + (isError ? ' error' : '') + (actionText ? ' has-action' : '');
     toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2800);
+
+    // Auto-hide after delay; longer if action present
+    const delay = actionText ? 6000 : 2800;
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => hideToast(), delay);
+}
+
+function hideToast() {
+    const toast = document.getElementById('toast');
+    if (toast) toast.classList.remove('show');
 }
 
 function setSyncStatus(status, text) {
@@ -55,4 +71,14 @@ function triggerConfetti() {
     }
     document.body.appendChild(container);
     setTimeout(() => container.remove(), 3500);
+}
+
+function hapticFeedback() {
+    if (navigator.vibrate) navigator.vibrate(40);
+}
+
+// XSS helper (also defined in app.js, but safe duplicate)
+function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }

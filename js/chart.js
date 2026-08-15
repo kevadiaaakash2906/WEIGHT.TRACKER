@@ -1,13 +1,33 @@
 // ============================================
 //  CHART RENDERING with Time Filters
+//  + Theme-aware colors
 // ============================================
 
 let chartInstance = null;
+
+function getChartColors() {
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    return {
+        morning: '#fbbf24',
+        night: '#a78bfa',
+        morningFillStart: isDark ? 'rgba(251,191,36,.12)' : 'rgba(251,191,36,.18)',
+        morningFillEnd: isDark ? 'rgba(251,191,36,0)' : 'rgba(251,191,36,0)',
+        nightFillStart: isDark ? 'rgba(167,139,250,.12)' : 'rgba(167,139,250,.18)',
+        nightFillEnd: isDark ? 'rgba(167,139,250,0)' : 'rgba(167,139,250,0)',
+        grid: isDark ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.06)',
+        ticks: isDark ? '#64748b' : '#475569',
+        tooltipBg: isDark ? 'rgba(12,15,26,.95)' : 'rgba(255,255,255,.95)',
+        tooltipText: isDark ? '#f1f5f9' : '#1e293b',
+        tooltipBorder: isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)',
+        pointBorder: isDark ? '#0c0f1a' : '#ffffff'
+    };
+}
 
 function renderChart(entries) {
     const ctx = document.getElementById('weightChart');
     if (!ctx) return;
     const context = ctx.getContext('2d');
+    const colors = getChartColors();
 
     if (chartInstance) chartInstance.destroy();
     if (!entries || entries.length === 0) return;
@@ -28,18 +48,18 @@ function renderChart(entries) {
                 {
                     label: 'Morning',
                     data: morningData,
-                    borderColor: '#fbbf24',
+                    borderColor: colors.morning,
                     backgroundColor: (ctx) => {
                         const c = ctx.chart.ctx;
                         const g = c.createLinearGradient(0, 0, 0, 210);
-                        g.addColorStop(0, 'rgba(251,191,36,.12)');
-                        g.addColorStop(1, 'rgba(251,191,36,0)');
+                        g.addColorStop(0, colors.morningFillStart);
+                        g.addColorStop(1, colors.morningFillEnd);
                         return g;
                     },
                     borderWidth: 3,
                     pointRadius: 4,
-                    pointBackgroundColor: '#fbbf24',
-                    pointBorderColor: '#0c0f1a',
+                    pointBackgroundColor: colors.morning,
+                    pointBorderColor: colors.pointBorder,
                     pointBorderWidth: 3,
                     pointHoverRadius: 6,
                     tension: .4,
@@ -49,18 +69,18 @@ function renderChart(entries) {
                 {
                     label: 'Night',
                     data: nightData,
-                    borderColor: '#a78bfa',
+                    borderColor: colors.night,
                     backgroundColor: (ctx) => {
                         const c = ctx.chart.ctx;
                         const g = c.createLinearGradient(0, 0, 0, 210);
-                        g.addColorStop(0, 'rgba(167,139,250,.12)');
-                        g.addColorStop(1, 'rgba(167,139,250,0)');
+                        g.addColorStop(0, colors.nightFillStart);
+                        g.addColorStop(1, colors.nightFillEnd);
                         return g;
                     },
                     borderWidth: 3,
                     pointRadius: 4,
-                    pointBackgroundColor: '#a78bfa',
-                    pointBorderColor: '#0c0f1a',
+                    pointBackgroundColor: colors.night,
+                    pointBorderColor: colors.pointBorder,
                     pointBorderWidth: 3,
                     pointHoverRadius: 6,
                     tension: .4,
@@ -76,10 +96,10 @@ function renderChart(entries) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(12,15,26,.95)',
-                    titleColor: '#f1f5f9',
-                    bodyColor: '#f1f5f9',
-                    borderColor: 'rgba(255,255,255,.08)',
+                    backgroundColor: colors.tooltipBg,
+                    titleColor: colors.tooltipText,
+                    bodyColor: colors.tooltipText,
+                    borderColor: colors.tooltipBorder,
                     borderWidth: 1,
                     padding: 12,
                     cornerRadius: 14,
@@ -96,12 +116,12 @@ function renderChart(entries) {
             },
             scales: {
                 x: {
-                    grid: { color: 'rgba(255,255,255,.03)', drawBorder: false },
-                    ticks: { color: '#64748b', font: { size: 10, family: 'Inter' }, maxRotation: 45, minRotation: 45 }
+                    grid: { color: colors.grid, drawBorder: false },
+                    ticks: { color: colors.ticks, font: { size: 10, family: 'Inter' }, maxRotation: 45, minRotation: 45 }
                 },
                 y: {
-                    grid: { color: 'rgba(255,255,255,.03)', drawBorder: false },
-                    ticks: { color: '#64748b', font: { size: 10, family: 'Inter' } }
+                    grid: { color: colors.grid, drawBorder: false },
+                    ticks: { color: colors.ticks, font: { size: 10, family: 'Inter' } }
                 }
             }
         }
