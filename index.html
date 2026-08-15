@@ -14,8 +14,26 @@
 </head>
 <body>
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="spinner"></div>
-        <div class="loading-text" id="loadingText">Connecting...</div>
+        <div class="skeleton-app">
+            <div class="skeleton-header"></div>
+            <div class="skeleton-stats">
+                <div class="skeleton-stat"></div>
+                <div class="skeleton-stat"></div>
+                <div class="skeleton-stat"></div>
+                <div class="skeleton-stat"></div>
+            </div>
+            <div class="skeleton-chart"></div>
+            <div class="skeleton-list">
+                <div class="skeleton-item"></div>
+                <div class="skeleton-item"></div>
+                <div class="skeleton-item"></div>
+            </div>
+        </div>
+        <div class="loading-text" id="loadingText">Loading...</div>
+    </div>
+    <div class="pull-refresh" id="pullRefresh">
+        <div class="pull-spinner" id="pullSpinner"></div>
+        <span id="pullText">Pull to refresh</span>
     </div>
 
     <div class="app" id="mainApp">
@@ -161,7 +179,11 @@
             </div>
             <div class="form-group">
                 <label for="weight" id="weightLabel">Weight (Morning) (kg)</label>
-                <input type="number" id="weight" step="0.1" placeholder="e.g. 72.5" required inputmode="decimal">
+                <div class="weight-input-wrap">
+                    <button class="stepper-btn" onclick="adjustWeight(-0.1)" type="button" aria-label="Decrease weight">−</button>
+                    <input type="number" id="weight" step="0.1" placeholder="e.g. 72.5" required inputmode="decimal">
+                    <button class="stepper-btn" onclick="adjustWeight(0.1)" type="button" aria-label="Increase weight">+</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>Progress Photo (optional)</label>
