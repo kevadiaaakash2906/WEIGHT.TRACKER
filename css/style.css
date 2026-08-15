@@ -761,3 +761,59 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
     color: var(--text);
     line-height: 1.45;
 }
+
+/* ============================================
+   FIX: History diff/button overlap on mobile
+   ============================================ */
+
+/* On touch devices, actions are always visible — give cards right padding */
+@media (hover: none) {
+    .entry-card {
+        padding-right: 80px;
+    }
+    .entry-card .actions {
+        top: 50%;
+        right: 12px;
+        transform: translateY(-50%);
+        flex-direction: column;
+        gap: 8px;
+    }
+    .entry-card .btn-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+    }
+    .entry-card .btn-icon svg {
+        width: 15px;
+        height: 15px;
+    }
+}
+
+/* On desktop, keep hover-reveal but ensure diff doesn't drift under */
+@media (hover: hover) {
+    .entry-card {
+        padding-right: 16px;
+    }
+    .entry-card .actions {
+        top: 8px;
+        right: 8px;
+        transform: none;
+        flex-direction: row;
+    }
+}
+
+/* Extra safeguard: diff section never grows into button zone */
+.entry-card .diff-section {
+    min-width: 40px;
+    max-width: 60px;
+    flex-shrink: 0;
+}
+
+/* Tighten the weights area to leave room for diff */
+.entry-card .weights {
+    gap: 10px;
+    min-width: 0;
+}
+.entry-card .weight-block .weight-val {
+    font-size: 1.05rem;
+}
