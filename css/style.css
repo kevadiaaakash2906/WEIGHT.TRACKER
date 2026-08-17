@@ -1211,3 +1211,46 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
     pointer-events: none;
     z-index: 5;
 }
+
+/* ============================================
+   PHOTO DELETE BUTTON
+   ============================================ */
+.photo-card {
+    position: relative;
+}
+.photo-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.6);
+    backdrop-filter: blur(4px);
+    border: none;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all .2s;
+    z-index: 2;
+    opacity: 0;
+}
+.photo-card:hover .photo-delete-btn,
+.photo-card:active .photo-delete-btn {
+    opacity: 1;
+}
+@media (hover: none) {
+    .photo-delete-btn {
+        opacity: 1;
+        top: 6px;
+        right: 6px;
+        width: 26px;
+        height: 26px;
+    }
+}
+.photo-delete-btn:active {
+    background: var(--danger);
+    transform: scale(.9);
+}
