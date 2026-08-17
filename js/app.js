@@ -963,6 +963,14 @@ function editEntry(id) {
         setTimeOfDay('morning');
         document.getElementById('weight').value = '';
     }
+    // Show existing photo in edit mode
+    if (e.photo) {
+        currentPhotoBase64 = e.photo;
+        showPhotoPreview(e.photo);
+    } else {
+        currentPhotoBase64 = null;
+        removePhoto();
+    }
     editingId = id;
     document.getElementById('sheetTitle').textContent = 'Edit Entry';
     document.getElementById('submitBtn').textContent = 'Update';
@@ -1137,9 +1145,13 @@ function renderPhotos() {
         const d = new Date(e.date + 'T00:00:00');
         const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const isLatest = i === 0;
-        return '<div class="photo-card" onclick="openPhotoCompare(' + i + ')">' +
-            '<img src="' + e.photo + '" alt="Progress photo ' + label + '" loading="lazy">' +
-            '<div class="photo-card-label">' + label + (isLatest ? ' <span class="photo-latest">Latest</span>' : '') + '</div>' +
+        const safeId = escapeHtml(e.id);
+        return '<div class="photo-card">' +
+            '<img src="' + e.photo + '" alt="Progress photo ' + label + '" loading="lazy" onclick="openPhotoCompare(' + i + ')">' +
+            '<button class="photo-delete-btn" onclick="event.stopPropagation();deletePhoto('' + safeId + '')" aria-label="Delete photo">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+            '</button>' +
+            '<div class="photo-card-label" onclick="openPhotoCompare(' + i + ')">' + label + (isLatest ? ' <span class="photo-latest">Latest</span>' : '') + '</div>' +
         '</div>';
     }).join('');
 }
@@ -1167,4 +1179,31 @@ function openPhotoCompare(index) {
 function closePhotoCompare() {
     document.getElementById('photoCompare').style.display = 'none';
     document.getElementById('photosGrid').style.display = 'grid';
+}
+
+async function deletePhoto(entryId) {
+    const entry = entries.find(e => e.id === entryId);
+    if (!entry || !entry.photo) return;
+    if (!confirm('Delete this progress photo? The weight entry will stay.')) return;
+
+    entry.photo = null;
+    saveLocal();
+    renderPhotos();
+    renderHistory();
+
+    if (db && userId && isOnline) {
+        setSyncStatus('syncing', 'Updating...');
+        try {
+            await db.collection('users').doc(userId).collection('entries').doc(entryId).update({
+                photo: firebase.firestore.FieldValue.delete()
+            });
+            setSyncStatus('', 'Synced');
+            showToast('Photo deleted');
+        } catch (err) {
+            console.error('Photo delete error:', err);
+            setSyncStatus('offline', 'Updated locally');
+        }
+    } else {
+        showToast('Photo deleted');
+    }
 }
