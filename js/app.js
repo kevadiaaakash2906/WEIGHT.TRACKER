@@ -620,7 +620,7 @@ function listenToFirestore() {
             const fireEntries = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
-                fireEntries.push({ id: doc.id, date: data.date, morning: data.morning, night: data.night });
+                fireEntries.push({ id: doc.id, date: data.date, morning: data.morning, night: data.night, photo: data.photo || null });
             });
             entries = fireEntries;
             saveLocal();
@@ -641,7 +641,10 @@ async function saveToFirestore(entry) {
     setSyncStatus('syncing', 'Saving...');
     try {
         await db.collection('users').doc(userId).collection('entries').doc(entry.id).set({
-            date: entry.date, morning: entry.morning ?? null, night: entry.night ?? null,
+            date: entry.date,
+            morning: entry.morning ?? null,
+            night: entry.night ?? null,
+            photo: entry.photo || null,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         setSyncStatus('', 'Synced');
@@ -1039,20 +1042,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let currentPhotoBase64 = null;
 
-function handlePhotoSelect(event) {
+function compressImage(file, maxWidth, quality) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            img.src = e.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width;
+                let h = img.height;
+                if (w > maxWidth) {
+                    h = Math.round(h * (maxWidth / w));
+                    w = maxWidth;
+                }
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(dataUrl);
+            };
+            img.onerror = reject;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handlePhotoSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-        showToast('Photo too large. Max 3MB.', true);
+    if (!file.type.startsWith('image/')) {
+        showToast('Please select an image file.', true);
         return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        currentPhotoBase64 = e.target.result;
+    showToast('Compressing photo...');
+    try {
+        const compressed = await compressImage(file, 800, 0.8);
+        const sizeKB = Math.round((compressed.length * 3) / 4 / 1024);
+        currentPhotoBase64 = compressed;
         showPhotoPreview(currentPhotoBase64);
+        showToast('Photo ready (' + sizeKB + ' KB)');
         hapticFeedback();
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+        console.error('Photo compression error:', err);
+        showToast('Could not process photo.', true);
+    }
 }
 
 function showPhotoPreview(base64) {
