@@ -549,19 +549,36 @@ function initFirebase() {
     let authResolved = false;
     let authCheckTimeout;
 
+    // Fallback: force show app after 8 seconds no matter what
+    const forceLoadTimeout = setTimeout(() => {
+        if (!authResolved) {
+            console.warn('Force loading app after timeout');
+            authResolved = true;
+            loadLocal();
+            renderAll();
+            hideLoading();
+            if (!firebase.auth().currentUser) {
+                showSignInScreen(null, false);
+            }
+        }
+    }, 8000);
+
     function onAuthResolved(user) {
         if (authResolved) return;
         authResolved = true;
         clearTimeout(authCheckTimeout);
+        clearTimeout(forceLoadTimeout);
 
         if (user) {
             userId = user.uid;
             hideSignInScreen();
-            document.getElementById('loadingText').textContent = 'Loading your data...';
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) loadingText.textContent = 'Loading your data...';
             listenToFirestore();
         } else {
             userId = null;
             if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+            hideLoading();
             // Show sign-in screen with appropriate message
             if (isReturningFromRedirect && isIOS()) {
                 showSignInScreen(
@@ -612,28 +629,42 @@ function initFirebase() {
 }
 
 function listenToFirestore() {
-    if (!db || !userId) return;
+    if (!db || !userId) {
+        console.warn('listenToFirestore: db or userId missing');
+        loadLocal();
+        renderAll();
+        hideLoading();
+        return;
+    }
     setSyncStatus('syncing', 'Syncing...');
-    unsubscribe = db.collection('users').doc(userId).collection('entries')
-        .orderBy('date', 'asc')
-        .onSnapshot(snapshot => {
-            const fireEntries = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                fireEntries.push({ id: doc.id, date: data.date, morning: data.morning, night: data.night, photo: data.photo || null });
+    try {
+        unsubscribe = db.collection('users').doc(userId).collection('entries')
+            .orderBy('date', 'asc')
+            .onSnapshot(snapshot => {
+                const fireEntries = [];
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    fireEntries.push({ id: doc.id, date: data.date, morning: data.morning, night: data.night, photo: data.photo || null });
+                });
+                entries = fireEntries;
+                saveLocal();
+                renderAll();
+                setSyncStatus('', 'Synced');
+                hideLoading();
+            }, err => {
+                console.error('Firestore error:', err);
+                setSyncStatus('offline', 'Offline — using local data');
+                loadLocal();
+                renderAll();
+                hideLoading();
             });
-            entries = fireEntries;
-            saveLocal();
-            renderAll();
-            setSyncStatus('', 'Synced');
-            hideLoading();
-        }, err => {
-            console.error('Firestore error:', err);
-            setSyncStatus('offline', 'Offline — using local data');
-            loadLocal();
-            renderAll();
-            hideLoading();
-        });
+    } catch (err) {
+        console.error('Firestore setup error:', err);
+        setSyncStatus('offline', 'Offline mode');
+        loadLocal();
+        renderAll();
+        hideLoading();
+    }
 }
 
 async function saveToFirestore(entry) {
@@ -1028,6 +1059,12 @@ window.addEventListener('offline', () => {
     isOnline = false;
     setSyncStatus('offline', 'Offline — changes saved locally');
 });
+
+window.onerror = function(msg, url, line) {
+    console.error('JS Error:', msg, 'at', url, ':', line);
+    hideLoading();
+    return false;
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
