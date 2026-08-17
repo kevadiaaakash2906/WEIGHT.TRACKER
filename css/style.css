@@ -991,14 +991,14 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
     width: 100%;
     max-width: 480px;
     padding: 0 16px;
-    opacity: .6;
 }
 .skeleton-header {
     height: 60px;
-    background: var(--surface);
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
     border-radius: 16px;
     margin: 24px auto 16px;
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 .skeleton-stats {
     display: flex;
@@ -1009,16 +1009,18 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
 .skeleton-stat {
     flex: 0 0 140px;
     height: 90px;
-    background: var(--surface);
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
     border-radius: 20px;
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 .skeleton-chart {
     height: 260px;
-    background: var(--surface);
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
     border-radius: 24px;
     margin-bottom: 16px;
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 .skeleton-list {
     display: flex;
@@ -1027,18 +1029,19 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
 }
 .skeleton-item {
     height: 80px;
-    background: var(--surface);
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%;
     border-radius: 20px;
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 .skeleton-stat:nth-child(2) { animation-delay: .1s; }
 .skeleton-stat:nth-child(3) { animation-delay: .2s; }
 .skeleton-stat:nth-child(4) { animation-delay: .3s; }
 .skeleton-item:nth-child(2) { animation-delay: .15s; }
 .skeleton-item:nth-child(3) { animation-delay: .3s; }
-@keyframes skeleton-pulse {
-    0%, 100% { opacity: .4; }
-    50% { opacity: .8; }
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
 /* ============================================
@@ -1254,4 +1257,3 @@ header p { color: var(--text-muted); margin-top: 4px; font-size: .85rem; }
     background: var(--danger);
     transform: scale(.9);
 }
-
